@@ -24,16 +24,18 @@ from rich.table import Table
 console = Console()
 
 
-def test_image_rotation(image_folder: str):
+def test_image_rotation(image_folder: str, force_exif: bool = False):
     """
     Test image rotation with a folder of images.
     
     Args:
         image_folder: Path to folder containing test images
+        force_exif: If True, applies EXIF to pixels even if tag is 1
     """
     console.print(Panel.fit(
         "[bold cyan]Image Rotation Test[/bold cyan]\n"
-        f"Testing folder: {image_folder}",
+        f"Testing folder: {image_folder}\n"
+        f"Force EXIF mode: {'Yes' if force_exif else 'No'}",
         border_style="cyan"
     ))
     
@@ -45,7 +47,7 @@ def test_image_rotation(image_folder: str):
         
         # Run rotation
         console.print("\n[cyan]Step 2: Rotate images[/cyan]")
-        result = handler.rotate_images()
+        result = handler.rotate_images(force_exif_to_pixels=force_exif)
         
         # Display detailed results
         console.print("\n" + "="*60)
@@ -107,17 +109,22 @@ def test_image_rotation(image_folder: str):
         else:
             console.print("[bold green]✓ TEST PASSED[/bold green]")
             console.print(f"[dim]{result['summary']['success']} images ready for upload[/dim]")
-        console.print("="*60)
-        
         # Next steps
         console.print("\n[cyan]Next Steps:[/cyan]")
         if result['summary']['success'] > 0 or result['summary']['skipped'] > 0:
             console.print("  1. Check the rotated images visually")
             console.print("  2. Verify orientations are correct")
+            if result['summary']['skipped'] > 0 and not force_exif:
+                console.print("  [yellow]Note: Images were skipped (no EXIF rotation found)[/yellow]")
+                console.print("  [yellow]If they appear rotated, run again with --force-exif flag[/yellow]")
             console.print("  3. If good, proceed to test login/navigation")
             console.print("     Run: python tests/test_login_navigation.py")
         else:
             console.print("  1. Ensure folder contains supported images (.jpg, .png, etc.)")
+            console.print("  2. Check file permissions")
+            console.print("  3. Try with a different folder")
+            if not force_exif:
+                console.print("  [yellow]4. If images look rotated, try --force-exif flag[/yellow]")ted images (.jpg, .png, etc.)")
             console.print("  2. Check file permissions")
             console.print("  3. Try with a different folder")
         
@@ -143,6 +150,11 @@ if __name__ == "__main__":
 Examples:
   python tests/test_image_rotation.py /Users/username/Desktop/test_images
   python tests/test_image_rotation.py ./sample_images
+  python tests/test_image_rotation.py test_images/ --force-exif
+
+Options:
+  --force-exif    Apply EXIF rotation to pixels even if EXIF tag is 1 (normal)
+                  Use this when images appear rotated but EXIF says they're normal
 
 This test will:
   1. Read EXIF orientation from images
@@ -158,14 +170,25 @@ This test will:
         help='Path to folder containing test images'
     )
     
+    parser.add_argument(
+        '--force-exif',
+        action='store_true',
+        help='Apply EXIF orientation to pixels regardless of EXIF tag value'
+    )
+    
     args = parser.parse_args()
     
     if not args.folder:
         console.print("[yellow]No folder specified. Usage:[/yellow]")
         console.print("  python tests/test_image_rotation.py /path/to/images")
+        console.print("  python tests/test_image_rotation.py /path/to/images --force-exif")
         console.print("\n[dim]Example:[/dim]")
         console.print("  python tests/test_image_rotation.py ~/Desktop/card_images")
+        console.print("\n[yellow]Use --force-exif if images are rotated but EXIF shows normal[/yellow]")
         sys.exit(1)
     
-    success = test_image_rotation(args.folder)
+    if args.force_exif:
+        console.print("[yellow]⚠ Force EXIF mode enabled - will apply EXIF to all images[/yellow]")
+    
+    success = test_image_rotation(args.folder, args.force_exif)
     sys.exit(0 if success else 1)

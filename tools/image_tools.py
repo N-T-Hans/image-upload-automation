@@ -100,7 +100,7 @@ class ImageRotationHandler:
             Orientation code (1-8), or 1 if no EXIF data found
             
         USER NOTE: If images appear rotated incorrectly after upload,
-        they may lack EXIF data. Consider manually rotating them first.
+        they may lack EXIF data. Use apply_exif_to_pixels() to fix this.
         """
         try:
             # Get EXIF data from image
@@ -116,6 +116,41 @@ class ImageRotationHandler:
         
         # Default: no rotation needed
         return 1
+    
+    def _apply_exif_to_pixels(self, image: Image.Image) -> Tuple[Image.Image, bool]:
+        """
+        Apply EXIF orientation to actual pixel data and remove EXIF orientation tag.
+        
+        This is useful when images have EXIF rotation that hasn't been applied to pixels.
+        Many photo editors rotate images by only changing EXIF data, not actual pixels.
+        
+        Args:
+            image: PIL Image object
+            
+        Returns:
+            Tuple of (rotated image, was_rotated boolean)
+            
+        USER NOTE: This bakes the EXIF rotation into the actual image pixels,
+        ensuring it displays correctly everywhere (even if EXIF is stripped).
+        """
+        orientation = self._read_exif_orientation(image)
+        
+        if orientation != 1:
+            # Apply the rotation to pixels
+            image = self._apply_rotation(image, orientation)
+            
+            # Remove EXIF orientation tag since we've applied it
+            try:
+                exif = image.getexif()
+                if EXIF_ORIENTATION_TAG in exif:
+                    exif[EXIF_ORIENTATION_TAG] = 1
+                    image.info['exif'] = exif.tobytes()
+            except Exception:
+                pass
+            
+            return image, True
+        
+        return image, False
     
     def _apply_rotation(self, image: Image.Image, orientation: int) -> Image.Image:
         """
@@ -161,13 +196,18 @@ class ImageRotationHandler:
         """
         return file_path.suffix.lower() in ['.jpg', '.jpeg']
     
-    def rotate_images(self) -> Dict:
+    def rotate_images(self, force_exif_to_pixels: bool = False) -> Dict:
         """
         Process all images in the folder and rotate them based on EXIF data.
         
         Strategy:
         - JPEG files: Create rotated copies in 'rotated_images' subfolder
         - Other formats: Rotate in-place (overwrites original)
+        
+        Args:
+            force_exif_to_pixels: If True, applies EXIF orientation to pixel data
+                                 even if EXIF tag is 1 (normal). Useful when images
+                                 were rotated by editing tools that don't update EXIF.
         
         Returns:
             Dictionary containing:
@@ -176,8 +216,8 @@ class ImageRotationHandler:
             - skipped: List of paths to images skipped (no rotation needed)
             - summary: {total, success, failed, skipped} counts
             
-        USER NOTE: After running, use the images from rotated_paths for upload.
-        Original JPEGs remain unchanged in the source folder.
+        USER NOTE: If images appear wrongly rotated despite EXIF showing "normal",
+        run with force_exif_to_pixels=True to apply any EXIF rotation to pixels.
         """
         rotated_paths = []
         failed = []
@@ -199,6 +239,10 @@ class ImageRotationHandler:
             }
         
         console.print(f"\n[cyan]Found {len(image_files)} images to process[/cyan]")
+        if force_exif_to_pixels:
+            console.print("[yellow]Mode: Applying EXIF to all images (ignoring orientation tag)[/yellow]")
+        else:
+            console.print("[cyan]Mode: Only rotating images with EXIF orientation != 1[/cyan]")
         
         # Process images with progress bar
         with Progress(
@@ -216,18 +260,29 @@ class ImageRotationHandler:
                 try:
                     # Open image
                     with Image.open(img_path) as img:
-                        # Read EXIF orientation
-                        orientation = self._read_exif_orientation(img)
                         
-                        # Check if rotation is needed
-                        if orientation == 1:
-                            # No rotation needed
-                            skipped.append(str(img_path))
-                            progress.update(task, advance=1, description=f"[dim]Skipped: {img_path.name}[/dim]")
-                            continue
-                        
-                        # Apply rotation
-                        rotated_img = self._apply_rotation(img, orientation)
+                        if force_exif_to_pixels:
+                            # Apply EXIF to pixels regardless of tag value
+                            rotated_img, was_rotated = self._apply_exif_to_pixels(img)
+                            
+                            if not was_rotated:
+                                # No EXIF rotation found
+                                skipped.append(str(img_path))
+                                progress.update(task, advance=1, description=f"[dim]Skipped: {img_path.name} (no EXIF)[/dim]")
+                                continue
+                        else:
+                            # Read EXIF orientation
+                            orientation = self._read_exif_orientation(img)
+                            
+                            # Check if rotation is needed
+                            if orientation == 1:
+                                # No rotation needed
+                                skipped.append(str(img_path))
+                                progress.update(task, advance=1, description=f"[dim]Skipped: {img_path.name}[/dim]")
+                                continue
+                            
+                            # Apply rotation
+                            rotated_img = self._apply_rotation(img, orientation)
                         
                         # Determine output path based on file type
                         if self._is_jpeg(img_path):

@@ -35,3 +35,7 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Test images folder
+test_images/*
+!test_images/README.md

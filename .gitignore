@@ -1,0 +1,37 @@
+# Configuration folder (contains credentials and settings)
+# Keep the folder structure but ignore all contents except .gitkeep
+config/*
+!config/.gitkeep
+
+# Legacy .env location (if users create it in root)
+.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Rotated images output
+rotated_images/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

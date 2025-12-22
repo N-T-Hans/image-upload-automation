@@ -1,0 +1,133 @@
+{
+  "_comment_header": "=================================================================",
+  "_comment_header2": "CardDealerPro Batch Upload Configuration Template",
+  "_comment_header3": "=================================================================",
+  "_comment_instructions": "1. Copy this file and rename it (e.g., my_batch_config.json)",
+  "_comment_instructions2": "2. Replace ALL fields marked with << USER: ... >>",
+  "_comment_instructions3": "3. Use docs/SELECTOR_GUIDE.md to find CSS selectors",
+  "_comment_instructions4": "4. Test with a small batch first to verify selectors work",
+  "_comment_header4": "=================================================================",
+  
+  "image_folder": "<< USER: REPLACE WITH ABSOLUTE PATH TO YOUR IMAGE FOLDER >>",
+  "_comment_image_folder": "Example: /Users/username/Desktop/card_images or C:\\Users\\username\\Desktop\\card_images",
+  
+  "urls": {
+    "_comment": "URLs for CardDealerPro workflow - verify these are current",
+    "login": "https://carddealerpro.com/login",
+    "batches": "https://v2.carddealerpro.com/upload/batches?status=open",
+    "general_settings": "https://v2.carddealerpro.com/create-batch/general-settings"
+  },
+  
+  "general_settings": {
+    "_comment": "<< USER: FILL IN ALL FIELDS BELOW >>",
+    "_comment2": "These values will be entered into the general settings form",
+    
+    "batch_name": "<< USER: ENTER BATCH NAME >>",
+    "_comment_batch_name": "Example: '2024 Topps Chrome Baseball Cards'",
+    
+    "batch_type": "<< USER: ENTER BATCH TYPE >>",
+    "_comment_batch_type": "Must exactly match dropdown option text. Example: 'Sports Cards'",
+    
+    "sport_type": "<< USER: ENTER SPORT TYPE >>",
+    "_comment_sport_type": "Must exactly match dropdown option text. Example: 'Baseball', 'Basketball', etc.",
+    
+    "title_template": "<< USER: ENTER TITLE TEMPLATE >>",
+    "_comment_title_template": "Must exactly match dropdown option text",
+    
+    "description": "<< USER: ENTER BATCH DESCRIPTION >>",
+    "_comment_description": "Example: 'Mint condition 2024 Topps Chrome cards from hobby box'"
+  },
+  
+  "optional_details": {
+    "_comment": "<< USER: ADD OPTIONAL FIELDS HERE OR LEAVE AS EMPTY OBJECT {} >>",
+    "_comment2": "These fields are completely optional - leave as {} to skip",
+    "_comment3": "If you add fields here, also add corresponding selectors below",
+    "_example_field": "Example: 'storage_location': 'Warehouse A, Shelf 3'"
+  },
+  
+  "selectors": {
+    "_comment": "=================================================================",
+    "_comment2": "<< USER: REPLACE ALL SELECTORS BELOW WITH ACTUAL CSS SELECTORS >>",
+    "_comment3": "Use Chrome DevTools to find selectors (see docs/SELECTOR_GUIDE.md)",
+    "_comment4": "Test each selector in browser console: document.querySelector('selector')",
+    "_comment5": "=================================================================",
+    
+    "_section_login": "--- LOGIN PAGE SELECTORS ---",
+    "username_input": "<< USER: CSS SELECTOR FOR USERNAME INPUT >>",
+    "_example_username": "Example: 'input[name=\"username\"]' or '#username' or 'input[type=\"email\"]'",
+    
+    "password_input": "<< USER: CSS SELECTOR FOR PASSWORD INPUT >>",
+    "_example_password": "Example: 'input[name=\"password\"]' or '#password' or 'input[type=\"password\"]'",
+    
+    "login_button": "<< USER: CSS SELECTOR FOR LOGIN BUTTON >>",
+    "_example_login_button": "Example: 'button[type=\"submit\"]' or '#login-btn' or 'button.login-button'",
+    
+    "_section_batches": "--- BATCHES PAGE SELECTORS ---",
+    "create_batch_button": "<< USER: CSS SELECTOR FOR CREATE BATCH BUTTON >>",
+    "_example_create_batch": "Example: 'button.create-batch' or 'a[href*=\"create-batch\"]'",
+    
+    "_section_general_settings": "--- GENERAL SETTINGS PAGE SELECTORS ---",
+    "batch_name_input": "<< USER: CSS SELECTOR FOR BATCH NAME INPUT >>",
+    "_example_batch_name": "Example: 'input[name=\"batch_name\"]' or '#batch-name'",
+    
+    "batch_type_select": "<< USER: CSS SELECTOR FOR BATCH TYPE DROPDOWN >>",
+    "_example_batch_type": "Example: 'select[name=\"batch_type\"]' or '#batch-type-select'",
+    
+    "sport_type_select": "<< USER: CSS SELECTOR FOR SPORT TYPE DROPDOWN >>",
+    "_example_sport_type": "Example: 'select[name=\"sport_type\"]' or '#sport-select'",
+    
+    "title_template_select": "<< USER: CSS SELECTOR FOR TITLE TEMPLATE DROPDOWN >>",
+    "_example_title_template": "Example: 'select[name=\"title_template\"]' or '#title-template'",
+    
+    "description_input": "<< USER: CSS SELECTOR FOR DESCRIPTION INPUT/TEXTAREA >>",
+    "_example_description": "Example: 'textarea[name=\"description\"]' or '#description'",
+    
+    "continue_button_general": "<< USER: CSS SELECTOR FOR CONTINUE BUTTON ON GENERAL SETTINGS PAGE >>",
+    "_example_continue_general": "Example: 'button.continue' or 'button[type=\"submit\"]'",
+    
+    "_section_optional_details": "--- OPTIONAL DETAILS PAGE SELECTORS ---",
+    "_comment_optional": "Only needed if you have fields in optional_details above",
+    "create_batch_submit": "<< USER: CSS SELECTOR FOR CREATE BATCH BUTTON ON OPTIONAL DETAILS PAGE >>",
+    "_example_create_submit": "Example: 'button.create-batch' or 'button[type=\"submit\"]'",
+    
+    "_section_batch_workflow": "--- BATCH WORKFLOW SELECTORS ---",
+    "magic_scan_button": "<< USER: CSS SELECTOR FOR MAGIC SCAN BUTTON >>",
+    "_example_magic_scan": "Example: 'button.magic-scan' or 'button[data-action=\"magic-scan\"]'",
+    
+    "sides_continue_button": "<< USER: CSS SELECTOR FOR CONTINUE BUTTON ON SIDES PAGE >>",
+    "_example_sides_continue": "Example: 'button.continue' or 'button[type=\"submit\"]'",
+    
+    "_section_upload": "--- UPLOAD PAGE SELECTORS ---",
+    "upload_file_input": "<< USER: CSS SELECTOR FOR FILE UPLOAD INPUT >>",
+    "_example_upload_input": "Example: 'input[type=\"file\"]' or 'input[name=\"files\"]' or '#file-upload'",
+    "_note_upload_input": "This input is often hidden - use browser DevTools to find it",
+    
+    "upload_continue_button": "<< USER: CSS SELECTOR FOR CONTINUE BUTTON AFTER UPLOAD >>",
+    "_example_upload_continue": "Example: 'button.continue' or 'button.next' or 'button[type=\"submit\"]'",
+    
+    "_section_validation": "--- INSPECTOR VIEW SELECTORS (OPTIONAL) ---",
+    "_comment_validation": "These are for future validation features - can leave as placeholders for now",
+    "image_count_display": "<< OPTIONAL: SELECTOR FOR IMAGE COUNT TEXT >>",
+    "_example_count_display": "Example: '.image-count' or 'span.total-images'",
+    
+    "image_thumbnail_container": "<< OPTIONAL: SELECTOR FOR IMAGE THUMBNAILS CONTAINER >>",
+    "_example_thumbnails": "Example: '.thumbnails-grid' or '#uploaded-images'"
+  },
+  
+  "workflow": {
+    "_comment": "Workflow control settings",
+    "stop_after": "inspector_view",
+    "_comment_stop_after": "Always 'inspector_view' for manual validation",
+    
+    "validate_upload_count": false,
+    "_comment_validate": "Set to true when you have image_count_display or image_thumbnail_container selectors configured"
+  },
+  
+  "_footer_comment": "=================================================================",
+  "_footer_comment2": "After filling this template:",
+  "_footer_comment3": "1. Ensure .env file has CDP_USERNAME and CDP_PASSWORD",
+  "_footer_comment4": "2. Test selectors in browser console",
+  "_footer_comment5": "3. Run: python scripts/image_upload_workflow.py --config your_config.json",
+  "_footer_comment6": "=================================================================",
+  "_footer_note": "For detailed help, see docs/QUICKSTART.md and docs/SELECTOR_GUIDE.md"
+}

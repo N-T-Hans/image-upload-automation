@@ -1,10 +1,9 @@
 """
 CardDealerPro Image Upload Automation Tools
 
-This package contains utility modules for automated image processing and web automation.
+This package contains utility modules for web automation.
 """
 
-from .image_tools import ImageRotationHandler
 from .web_automation_tools import (
     ElementWaiter,
     LoginHandler,
@@ -13,7 +12,6 @@ from .web_automation_tools import (
 )
 
 __all__ = [
-    'ImageRotationHandler',
     'ElementWaiter',
     'LoginHandler',
     'FormNavigator',

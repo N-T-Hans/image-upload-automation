@@ -26,6 +26,11 @@ A Python-based Selenium automation tool for batch uploading images to CardDealer
 - [x] Create `.env.example` template
 - [x] Define global constants in `config.py`
 - [x] Write `README.md` with project overview
+- script selects them in finder, manually rotate (command +r 3 times on front, command +r 1 time on back)
+- use folder name as batch name when creating a new batch
+- csv modification - export does not allow duplicate card. Dylan has to manually create a concat with the name/sku then match the front/back photos with the generated row, and the manually generated row
+
+
 
 **Deliverables:**
 - Clean project structure

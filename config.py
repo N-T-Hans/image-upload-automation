@@ -41,11 +41,11 @@ SELENIUM_HEADLESS = False
 
 # Maximum time to wait for elements to appear (seconds)
 # USER NOTE: Increase if you have slow internet or the website is slow
-SELENIUM_TIMEOUT = 30
+SELENIUM_TIMEOUT = 15
 
 # Maximum number of login attempts before giving up
 # USER NOTE: Increase if experiencing intermittent login issues
-MAX_LOGIN_RETRIES = 3
+MAX_LOGIN_RETRIES = 1
 
 # =============================================================================
 # BATCH ID EXTRACTION

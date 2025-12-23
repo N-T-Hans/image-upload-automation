@@ -207,7 +207,8 @@ class LoginHandler:
         username_selector: str,
         password_selector: str,
         login_button_selector: str,
-        success_url_pattern: str
+        success_url_pattern: str,
+        continue_button_selector: str = None
     ) -> bool:
         """
         Perform login to CardDealerPro.
@@ -215,9 +216,11 @@ class LoginHandler:
         Process:
         1. Navigate to login URL
         2. Wait for login form to appear
-        3. Fill username and password
-        4. Click login button
-        5. Verify redirect to expected URL
+        3. Fill username
+        4. Click continue button (if two-step login)
+        5. Fill password
+        6. Click login button
+        7. Verify redirect to expected URL
         
         Args:
             login_url: URL of login page
@@ -227,6 +230,7 @@ class LoginHandler:
             password_selector: CSS selector for password input
             login_button_selector: CSS selector for login button
             success_url_pattern: URL fragment expected after successful login
+            continue_button_selector: Optional CSS selector for continue button after username
             
         Returns:
             True if login successful, False otherwise
@@ -250,6 +254,14 @@ class LoginHandler:
                 username_field.clear()
                 username_field.send_keys(username)
                 console.print("[green]✓ Username entered[/green]")
+                
+                # Click continue button if two-step login
+                if continue_button_selector:
+                    console.print("[dim]Clicking continue button...[/dim]")
+                    continue_button = self.waiter.wait_for_element_clickable(continue_button_selector)
+                    continue_button.click()
+                    console.print("[green]✓ Continue clicked[/green]")
+                    time.sleep(1)  # Brief pause for page transition
                 
                 # Wait for and fill password
                 console.print("[dim]Waiting for password field...[/dim]")
@@ -476,7 +488,8 @@ class FormSubmitter:
             TimeoutException: If element not found
             NoSuchElementException: If option value not found
             
-        USER NOTE: The value must match the visible text in the dropdown exactly
+        USER NOTE: The value must match the visible text in the dropdown exactly.
+        For custom dropdowns (non-native <select>), use select_custom_dropdown_option instead.
         """
         try:
             console.print(f"[dim]Selecting {label}...[/dim]")
@@ -503,6 +516,99 @@ class FormSubmitter:
             console.print(f"[red]✗ Failed to select {label}: {str(e)}[/red]")
             raise
     
+    def select_custom_dropdown_option(self, button_selector: str, value: str, label: str = "dropdown") -> bool:
+        """
+        Select option from custom dropdown (non-native <select>).
+        
+        Works with custom dropdowns like Headless UI, Material UI, etc.
+        Process:
+        1. Click button/trigger to open dropdown
+        2. Wait for options to appear
+        3. Click option matching the value text
+        
+        Args:
+            button_selector: CSS selector for dropdown button/trigger
+            value: Visible text of option to select
+            label: Human-readable field name for logging
+            
+        Returns:
+            True if successful
+            
+        Raises:
+            TimeoutException: If button or option not found
+            
+        USER NOTE: This method works with custom dropdowns that don't use <select> elements.
+        The value must match the visible text in the option exactly.
+        """
+        try:
+            console.print(f"[dim]Opening {label} dropdown...[/dim]")
+            
+            # Determine locator strategy (CSS by default, XPath if selector looks like XPath)
+            from selenium.webdriver.common.by import By
+            sel = button_selector.strip()
+            by = By.XPATH if sel.startswith("//") or sel.startswith(".//") else By.CSS_SELECTOR
+            
+            # Click button to open dropdown
+            button = self.waiter.wait_for_element_clickable(button_selector, by=by)
+            button.click()
+            
+            # Wait a moment for dropdown to open
+            import time
+            time.sleep(0.5)
+            
+            # Try multiple selectors for the option
+            option_selectors = [
+                f"li:contains('{value}')",  # Common list item
+                f"[role='option']:contains('{value}')",  # ARIA role
+                f"span:contains('{value}')",  # Span containing text
+                f"div:contains('{value}')",  # Div containing text
+                f"button:contains('{value}')",  # Button option
+            ]
+            
+            option_element = None
+            for selector in option_selectors:
+                try:
+                    # Convert :contains() to XPath since CSS doesn't support it
+                    # Extract the text from :contains('text')
+                    import re
+                    match = re.match(r"(\w+):contains\('(.+)'\)", selector)
+                    if match:
+                        tag = match.group(1)
+                        text = match.group(2)
+                        xpath = f"//{tag}[contains(text(), '{text}')]"
+                        
+                        from selenium.webdriver.common.by import By
+                        elements = self.driver.find_elements(By.XPATH, xpath)
+                        
+                        # Filter to visible elements
+                        for elem in elements:
+                            if elem.is_displayed() and elem.text.strip() == text:
+                                option_element = elem
+                                break
+                        
+                        if option_element:
+                            break
+                except:
+                    continue
+            
+            if not option_element:
+                raise Exception(f"Could not find option '{value}' in dropdown")
+            
+            # Click the option
+            console.print(f"[dim]Clicking option: {value}...[/dim]")
+            option_element.click()
+            
+            console.print(f"[green]✓ Selected {label}: {value}[/green]")
+            return True
+            
+        except Exception as e:
+            console.print(f"[red]✗ Failed to select {label}: {str(e)}[/red]")
+            console.print("[yellow]USER ACTION REQUIRED:[/yellow]")
+            console.print(f"  1. Verify button selector '{button_selector}' is correct")
+            console.print(f"  2. Check that option '{value}' exists and is visible")
+            console.print(f"  3. Try clicking manually to see dropdown behavior")
+            raise
+    
     def upload_files(self, selector: str, file_paths: List[str]) -> bool:
         """
         Upload multiple files to file input element.
@@ -525,8 +631,14 @@ class FormSubmitter:
         try:
             console.print(f"[cyan]Uploading {len(file_paths)} files...[/cyan]")
             
-            # Wait for file input (note: file inputs are often hidden)
-            element = self.waiter.wait_for_element_visible(selector)
+            # Wait for file input (note: file inputs are often hidden with opacity-0)
+            # Use presence check instead of visibility since input may be hidden
+            from selenium.webdriver.common.by import By
+            from selenium.webdriver.support import expected_conditions as EC
+            
+            element = self.waiter.wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+            )
             
             # Join all file paths with newline (for multiple file upload)
             files_string = "\n".join(file_paths)
@@ -566,8 +678,12 @@ class FormSubmitter:
             try:
                 console.print(f"[dim]Clicking {label}...[/dim]")
                 
+                # Determine locator strategy (CSS by default, XPath if selector looks like XPath)
+                sel = selector.strip()
+                by = By.XPATH if sel.startswith("//") or sel.startswith(".//") else By.CSS_SELECTOR
+
                 # Wait for element to be clickable
-                element = self.waiter.wait_for_element_clickable(selector)
+                element = self.waiter.wait_for_element_clickable(selector, by=by)
                 
                 # Scroll element into view (helps with click interception issues)
                 self.driver.execute_script("arguments[0].scrollIntoView(true);", element)

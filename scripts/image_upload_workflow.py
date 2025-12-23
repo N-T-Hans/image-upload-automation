@@ -34,7 +34,6 @@ from rich.table import Table
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tools.image_tools import ImageRotationHandler
 from tools.web_automation_tools import (
     ElementWaiter,
     LoginHandler,
@@ -54,7 +53,7 @@ class CardDealerProWorkflow:
     final upload and validation at the inspector view.
     
     Workflow Steps:
-    1. Rotate images based on EXIF orientation
+    1. Rotate images (front → orientation 8, back → orientation 6)
     2. Login to CardDealerPro
     3. Navigate to batches page
     4. Click create batch button
@@ -73,16 +72,17 @@ class CardDealerProWorkflow:
     17. Wait for inspector view
     18. Stop for manual validation
     
-    USER NOTE: The workflow stops at inspector view for you to manually
-    validate the uploaded images before finalizing the batch.
+    USER NOTE: Images with "front" or "back" in filename are automatically rotated.
+    The workflow stops at inspector view for manual validation.
     """
     
-    def __init__(self, config_path: str, headless: bool = False):
+    def __init__(self, config_path: str, folder_path: Optional[str] = None, headless: bool = False):
         """
         Initialize workflow orchestrator.
         
         Args:
             config_path: Path to JSON configuration file
+            folder_path: Path to folder containing images (overrides config and sets batch_name)
             headless: Run browser in headless mode (no visible window)
             
         Raises:
@@ -92,6 +92,7 @@ class CardDealerProWorkflow:
         USER NOTE: See config_templates/upload_config.example.json for structure
         """
         self.config_path = Path(config_path)
+        self.folder_path = Path(folder_path) if folder_path else None
         self.headless = headless
         self.driver = None
         self.waiter = None
@@ -113,6 +114,37 @@ class CardDealerProWorkflow:
         
         # Load and validate configuration
         self._load_config()
+        
+        # Override image_folder and batch_name if folder_path provided
+        if self.folder_path:
+            # If folder_path is relative or just a name, combine with default_images_path
+            if not self.folder_path.is_absolute():
+                default_base = self.config.get('default_images_path')
+                if not default_base:
+                    raise ValueError(
+                        "Relative folder path provided but 'default_images_path' not set in config. "
+                        "Either use absolute path or set 'default_images_path' in your config."
+                    )
+                self.folder_path = Path(default_base) / self.folder_path
+                console.print(f"[cyan]→ Using base path: {default_base}[/cyan]")
+            
+            if not self.folder_path.exists():
+                raise FileNotFoundError(f"Folder not found: {self.folder_path}")
+            if not self.folder_path.is_dir():
+                raise ValueError(f"Not a directory: {self.folder_path}")
+            
+            # Set image_folder to absolute path
+            self.config['image_folder'] = str(self.folder_path.resolve())
+            
+            # Set batch_name to folder name
+            folder_name = self.folder_path.name
+            if 'general_settings' not in self.config:
+                self.config['general_settings'] = {}
+            self.config['general_settings']['batch_name'] = folder_name
+            
+            console.print(f"[cyan]→ Using folder: {folder_name}[/cyan]")
+            console.print(f"[cyan]→ Batch name set to: {folder_name}[/cyan]")
+        
         self._validate_config()
         
         console.print(Panel.fit(
@@ -230,35 +262,82 @@ class CardDealerProWorkflow:
     
     def _rotate_images(self) -> bool:
         """
-        Step 1: Rotate images based on EXIF orientation.
+        Step 1: Rotate images based on filename patterns.
         
-        Uses ImageRotationHandler to process all images in the configured folder.
-        Continues workflow even if some images fail to rotate.
+        Rotates images with "front" in name to orientation 8 (270° CW)
+        and images with "back" in name to orientation 6 (90° CW).
         
         Returns:
-            True if at least some images were successfully rotated
-            
-        USER NOTE: Failed image rotations are logged but don't stop the workflow
+            True if folder exists and has images
         """
         console.print("\n" + "="*60)
         console.print("[bold cyan]STEP 1: Rotate Images[/bold cyan]")
         console.print("="*60)
         
         try:
-            handler = ImageRotationHandler(self.config['image_folder'])
-            result = handler.rotate_images()
+            from pathlib import Path
+            from PIL import Image
             
-            # Store paths to successfully rotated images for upload
-            self.rotated_image_paths = result['rotated_paths']
+            image_folder = Path(self.config['image_folder'])
             
-            # Also include skipped images (no rotation needed)
-            self.rotated_image_paths.extend(result['skipped'])
-            
-            if not self.rotated_image_paths:
-                console.print("[red]✗ No images available for upload[/red]")
+            if not image_folder.exists():
+                console.print(f"[red]✗ Image folder not found: {image_folder}[/red]")
                 return False
             
-            console.print(f"\n[green]✓ {len(self.rotated_image_paths)} images ready for upload[/green]")
+            # Find image files
+            supported_formats = {'.jpg', '.jpeg', '.png', '.tiff', '.tif', '.bmp'}
+            image_files = [
+                f for f in image_folder.iterdir()
+                if f.is_file() and f.suffix.lower() in supported_formats
+            ]
+            
+            if not image_files:
+                console.print(f"[red]✗ No image files found in {image_folder}[/red]")
+                return False
+            
+            # Rotation statistics
+            stats = {'front': 0, 'back': 0, 'skipped': 0, 'errors': 0}
+            
+            console.print(f"[cyan]Processing {len(image_files)} images...[/cyan]")
+            
+            # EXIF orientation tag
+            ORIENTATION_TAG = 0x0112
+            
+            for image_file in image_files:
+                filename_lower = image_file.name.lower()
+                
+                # Determine orientation based on filename
+                if 'front' in filename_lower:
+                    orientation = 8  # 270° CW
+                    stats['front'] += 1
+                elif 'back' in filename_lower:
+                    orientation = 6  # 90° CW
+                    stats['back'] += 1
+                else:
+                    # Skip files without front/back in name
+                    stats['skipped'] += 1
+                    continue
+                
+                # Set EXIF orientation
+                try:
+                    img = Image.open(image_file)
+                    exif = img.getexif()
+                    exif[ORIENTATION_TAG] = orientation
+                    img.save(image_file, exif=exif, quality=95)
+                except Exception as e:
+                    console.print(f"[red]✗ Error: {image_file.name} - {e}[/red]")
+                    stats['errors'] += 1
+            
+            # Store image paths for upload
+            self.rotated_image_paths = [str(f) for f in image_files]
+            
+            # Summary
+            console.print(f"\n[green]✓ Processed {len(image_files)} images[/green]")
+            console.print(f"  Front: {stats['front']} | Back: {stats['back']} | Skipped: {stats['skipped']} | Errors: {stats['errors']}")
+            
+            if stats['errors'] > 0:
+                console.print(f"[yellow]⚠ {stats['errors']} images had errors but workflow will continue[/yellow]")
+            
             return True
             
         except Exception as e:
@@ -305,48 +384,44 @@ class CardDealerProWorkflow:
             username_selector=self.config['selectors']['username_input'],
             password_selector=self.config['selectors']['password_input'],
             login_button_selector=self.config['selectors']['login_button'],
-            success_url_pattern=self.config['urls']['batches']
+            success_url_pattern=self.config['urls']['inventory'],
+            continue_button_selector=self.config['selectors'].get('continue_button')
         )
     
     def _navigate_to_batches(self) -> bool:
         """
-        Step 3: Navigate to batches page.
+        Step 3: Navigate to General Settings page directly.
         
         Returns:
             True if navigation successful
         """
         console.print("\n" + "="*60)
-        console.print("[bold cyan]STEP 3: Navigate to Batches Page[/bold cyan]")
+        console.print("[bold cyan]STEP 3: Navigate to General Settings[/bold cyan]")
         console.print("="*60)
         
         navigator = FormNavigator(self.driver, self.waiter)
+        # Prefer navigating directly to general settings
+        wait_selector = (
+            self.config['selectors'].get('batch_name_input')
+            or self.config['selectors'].get('batch_type_select')
+            or self.config['selectors'].get('sport_type_select')
+        )
         return navigator.navigate_to(
-            self.config['urls']['batches'],
-            wait_for_selector=self.config['selectors']['create_batch_button']
+            self.config['urls']['general_settings'],
+            wait_for_selector=wait_selector
         )
     
     def _click_create_batch(self) -> bool:
         """
-        Step 4: Click create batch button.
+        Step 4: (Skipped) Direct navigation already reached General Settings.
         
         Returns:
             True if successful
         """
         console.print("\n" + "="*60)
-        console.print("[bold cyan]STEP 4: Click Create Batch Button[/bold cyan]")
+        console.print("[bold cyan]STEP 4: Skip Create Batch (Direct Nav)[/bold cyan]")
         console.print("="*60)
-        
-        submitter = FormSubmitter(self.driver, self.waiter)
-        success = submitter.click_button(
-            self.config['selectors']['create_batch_button'],
-            label="Create Batch"
-        )
-        
-        if success:
-            # Wait for general settings page to load
-            self.waiter.wait_for_url_contains('general-settings')
-        
-        return success
+        return True
     
     def _fill_general_settings(self) -> bool:
         """
@@ -368,40 +443,76 @@ class CardDealerProWorkflow:
         selectors = self.config['selectors']
         
         try:
-            # Fill batch name
-            submitter.fill_text_input(
-                selectors['batch_name_input'],
-                settings['batch_name'],
-                label="Batch Name"
-            )
+            # Fill batch name (if both selector and value provided)
+            if selectors.get('batch_name_input') and settings.get('batch_name'):
+                submitter.fill_text_input(
+                    selectors['batch_name_input'],
+                    settings['batch_name'],
+                    label="Batch Name"
+                )
+            else:
+                console.print("[dim]Skipping Batch Name (missing selector or value)[/dim]")
             
-            # Select batch type
-            submitter.select_dropdown_option(
-                selectors['batch_type_select'],
-                settings['batch_type'],
-                label="Batch Type"
-            )
+            # Select batch type - check if it's a custom dropdown
+            if selectors.get('batch_type_select') and settings.get('batch_type'):
+                if selectors.get('batch_type_select_type') == 'custom':
+                    submitter.select_custom_dropdown_option(
+                        selectors['batch_type_select'],
+                        settings['batch_type'],
+                        label="Batch Type"
+                    )
+                else:
+                    submitter.select_dropdown_option(
+                        selectors['batch_type_select'],
+                        settings['batch_type'],
+                        label="Batch Type"
+                    )
+            else:
+                console.print("[dim]Skipping Batch Type (missing selector or value)[/dim]")
             
-            # Select sport type
-            submitter.select_dropdown_option(
-                selectors['sport_type_select'],
-                settings['sport_type'],
-                label="Sport Type"
-            )
+            # Select sport type (Game)
+            if selectors.get('sport_type_select') and settings.get('sport_type'):
+                if selectors.get('sport_type_select_type') == 'custom':
+                    submitter.select_custom_dropdown_option(
+                        selectors['sport_type_select'],
+                        settings['sport_type'],
+                        label="Sport Type"
+                    )
+                else:
+                    submitter.select_dropdown_option(
+                        selectors['sport_type_select'],
+                        settings['sport_type'],
+                        label="Sport Type"
+                    )
+            else:
+                console.print("[dim]Skipping Sport/Game Type (missing selector or value)[/dim]")
             
-            # Select title template
-            submitter.select_dropdown_option(
-                selectors['title_template_select'],
-                settings['title_template'],
-                label="Title Template"
-            )
+            # Select title template (optional)
+            if selectors.get('title_template_select') and settings.get('title_template'):
+                if selectors.get('title_template_select_type') == 'custom':
+                    submitter.select_custom_dropdown_option(
+                        selectors['title_template_select'],
+                        settings['title_template'],
+                        label="Title Template"
+                    )
+                else:
+                    submitter.select_dropdown_option(
+                        selectors['title_template_select'],
+                        settings['title_template'],
+                        label="Title Template"
+                    )
+            else:
+                console.print("[dim]Skipping Title Template (missing selector or value)[/dim]")
             
-            # Fill description
-            submitter.fill_text_input(
-                selectors['description_input'],
-                settings['description'],
-                label="Description"
-            )
+            # Fill description (optional)
+            if selectors.get('description_input') and settings.get('description'):
+                submitter.fill_text_input(
+                    selectors['description_input'],
+                    settings['description'],
+                    label="Description"
+                )
+            else:
+                console.print("[dim]Skipping Description (missing selector or value)[/dim]")
             
             console.print("[green]✓ All general settings filled[/green]")
             return True
@@ -467,15 +578,19 @@ class CardDealerProWorkflow:
                     console.print(f"[dim]Add '{selector_key}' to selectors in config.json[/dim]")
                     continue
                 
-                # Try to fill the field (could be text input or dropdown)
+                # Try to fill the field (text, dropdown, or click-only like radio/checkbox)
                 try:
                     submitter.fill_text_input(selector, field_value, label=field_name)
-                except:
-                    # If text input fails, try as dropdown
+                except Exception:
+                    # If text input fails, try as native <select> dropdown
                     try:
                         submitter.select_dropdown_option(selector, field_value, label=field_name)
-                    except:
-                        console.print(f"[yellow]⚠ Could not fill optional field: {field_name}[/yellow]")
+                    except Exception:
+                        # As a final fallback, try clicking the element (for radio/checkbox/toggles)
+                        try:
+                            submitter.click_button(selector, label=field_name)
+                        except Exception:
+                            console.print(f"[yellow]⚠ Could not set optional field: {field_name}[/yellow]")
             
             console.print("[green]✓ Optional details processed[/green]")
             return True
@@ -569,20 +684,55 @@ class CardDealerProWorkflow:
         console.print("[bold cyan]STEP 11: Select Sides[/bold cyan]")
         console.print("="*60)
         
-        # If there are side-specific selections needed, add them here
-        # For now, just click continue
-        
         submitter = FormSubmitter(self.driver, self.waiter)
-        success = submitter.click_button(
-            self.config['selectors']['sides_continue_button'],
-            label="Continue (Sides)"
-        )
+        selectors = self.config.get('selectors', {})
+        scan_options = self.config.get('scan_options', {})
         
-        if success:
-            # Wait for upload page
-            self.waiter.wait_for_url_contains('/upload')
+        # 11.a Select card type (radio) if provided
+        card_type_selector = selectors.get('scan_card_type_radio')
+        if card_type_selector:
+            try:
+                label = f"Card Type ({scan_options.get('card_type', '')})".strip()
+                submitter.click_button(card_type_selector, label=label or "Card Type")
+            except Exception:
+                console.print("[yellow]⚠ Could not set Card Type radio; continuing[/yellow]")
         
-        return success
+        # 11.b Select sides via clickable tile (preferred) or dropdown fallback
+        sides_value = scan_options.get('sides')
+        sides_option_selector = selectors.get('scan_sides_option')
+        if sides_option_selector:
+            try:
+                label = f"Sides ({sides_value})" if sides_value else "Sides"
+                submitter.click_button(sides_option_selector, label=label)
+            except Exception:
+                console.print("[yellow]⚠ Could not click Sides option tile; trying dropdown if available[/yellow]")
+                # Fall through to dropdown path
+        else:
+            sides_selector = selectors.get('scan_sides_select')
+            if sides_selector and sides_value:
+                try:
+                    if selectors.get('scan_sides_select_type') == 'custom':
+                        submitter.select_custom_dropdown_option(sides_selector, sides_value, label="Sides")
+                    else:
+                        submitter.select_dropdown_option(sides_selector, sides_value, label="Sides")
+                except Exception:
+                    console.print("[yellow]⚠ Could not set Sides selection; continuing[/yellow]")
+        
+        console.print("[green]✓ Sides selection completed[/green]")
+        
+        # Wait for upload page to load
+        import time
+        console.print("[dim]Waiting for upload page...[/dim]")
+        time.sleep(2)
+        
+        # Wait for upload page URL
+        try:
+            self.waiter.wait_for_url_contains('/add/upload')
+        except Exception:
+            # If URL doesn't change, try waiting for upload input directly
+            console.print("[dim]Upload page URL not detected, checking for upload input...[/dim]")
+        
+        return True
     
     def _upload_images(self) -> bool:
         """
@@ -606,6 +756,11 @@ class CardDealerProWorkflow:
         submitter = FormSubmitter(self.driver, self.waiter)
         
         try:
+            # Wait for upload page to be ready
+            import time
+            console.print("[dim]Ensuring upload page is ready...[/dim]")
+            time.sleep(2)
+            
             # Upload all images
             success = submitter.upload_files(
                 self.config['selectors']['upload_file_input'],
@@ -625,6 +780,8 @@ class CardDealerProWorkflow:
         """
         Step 13: Click continue after upload.
         
+        Waits for all uploads to complete and button to become clickable.
+        
         Returns:
             True if successful
         """
@@ -632,18 +789,37 @@ class CardDealerProWorkflow:
         console.print("[bold cyan]STEP 13: Continue After Upload[/bold cyan]")
         console.print("="*60)
         
-        # Wait a moment for uploads to process
+        # Wait for uploads to process and button to become available
         import time
-        console.print("[dim]Waiting for uploads to process...[/dim]")
-        time.sleep(3)
+        console.print("[dim]Waiting for uploads to complete...[/dim]")
         
-        submitter = FormSubmitter(self.driver, self.waiter)
-        success = submitter.click_button(
-            self.config['selectors']['upload_continue_button'],
-            label="Continue (Upload)"
-        )
-        
-        return success
+        # Wait for the button to be clickable (uploads are done)
+        try:
+            from selenium.webdriver.common.by import By
+            from selenium.webdriver.support import expected_conditions as EC
+            
+            button_selector = self.config['selectors']['upload_continue_button']
+            
+            # Wait up to 60 seconds for button to be clickable
+            console.print("[dim]Waiting for continue button to be enabled...[/dim]")
+            button = self.waiter.wait.until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, button_selector))
+            )
+            
+            # Extra safety wait
+            time.sleep(2)
+            
+            submitter = FormSubmitter(self.driver, self.waiter)
+            success = submitter.click_button(
+                button_selector,
+                label="Continue (Upload)"
+            )
+            
+            return success
+            
+        except Exception as e:
+            console.print(f"[red]✗ Failed to click continue button: {str(e)}[/red]")
+            return False
     
     def _reach_inspector_view(self) -> bool:
         """
@@ -827,8 +1003,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python scripts/image_upload_workflow.py --config my_batch.json
-  python scripts/image_upload_workflow.py --config my_batch.json --headless
+  python scripts/image_upload_workflow.py --config my_batch.json --folder path/to/images
+  python scripts/image_upload_workflow.py --config my_batch.json --folder A3
+  python scripts/image_upload_workflow.py --config my_batch.json --folder A3 --headless
 
 For more information, see docs/USAGE.md
         """
@@ -841,6 +1018,11 @@ For more information, see docs/USAGE.md
     )
     
     parser.add_argument(
+        '--folder',
+        help='Folder name or path containing images. If just a name (e.g., "A3"), uses default_images_path from config. Sets batch_name to folder name.'
+    )
+    
+    parser.add_argument(
         '--headless',
         action='store_true',
         help='Run browser in headless mode (no visible window)'
@@ -849,7 +1031,7 @@ For more information, see docs/USAGE.md
     args = parser.parse_args()
     
     try:
-        workflow = CardDealerProWorkflow(args.config, args.headless)
+        workflow = CardDealerProWorkflow(args.config, args.folder, args.headless)
         success = workflow.run()
         
         sys.exit(0 if success else 1)

@@ -1267,7 +1267,16 @@ For more information, see docs/USAGE.md
         console.print(summary_table)
         console.print()
         console.print(f"Total: {total_folders} | [green]Success: {successful}[/green] | [red]Failed: {failed}[/red]")
-        console.print("="*70 + "\n")
+        console.print("="*70)
+        
+        # Rainbow text for fun
+        rainbow_text = "Nick was here"
+        colors = ["red", "yellow", "green", "cyan", "blue", "magenta"]
+        rainbow_output = ""
+        for i, char in enumerate(rainbow_text):
+            color = colors[i % len(colors)]
+            rainbow_output += f"[{color}]{char}[/{color}]"
+        console.print(f"\n{rainbow_output}\n")
         
         sys.exit(0 if failed == 0 else 1)
 

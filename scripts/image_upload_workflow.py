@@ -2,17 +2,17 @@
 """
 CardDealerPro Image Upload Workflow Orchestrator
 
-This script orchestrates the complete 20-step workflow for uploading images
+This script orchestrates the complete workflow for uploading images
 to CardDealerPro, including image rotation, login, batch creation, and upload.
 
 Usage:
-    python scripts/image_upload_workflow.py --config config/upload_config.json [--headless]
+    python3 scripts/image_upload_workflow.py --config config/upload_config.json --folder Test1
+    python3 scripts/image_upload_workflow.py --config config/upload_config.json --folder Test1 --headless
 
 USER NOTE: Before running, ensure:
 1. config/.env file exists with CDP_USERNAME and CDP_PASSWORD
-   (copy from templates/env.template)
-2. config file created from templates/upload_config.template.json
-3. All selectors in config file are updated for your website
+2. config/upload_config.json created and configured with selectors
+3. default_images_path set in config (or use full path with --folder)
 """
 
 import os
@@ -49,34 +49,29 @@ class CardDealerProWorkflow:
     """
     Orchestrates the complete CardDealerPro batch upload workflow.
     
-    This class manages the 20-step process from image rotation through
+    This class manages the process from image rotation through
     final upload and validation at the inspector view.
     
     Workflow Steps:
     1. Rotate images (front → orientation 8, back → orientation 6)
     2. Login to CardDealerPro
-    3. Navigate to batches page
-    4. Click create batch button
-    5. Fill general settings form
-    6. Click continue button
-    7. Fill optional details (if configured)
-    8. Click create batch button
-    9. Extract batch_id from URL
-    10. Click magic scan button
-    11. Navigate sides selection page
-    12. Click continue for sides
-    13. Navigate to upload page
-    14. Locate file upload input
-    15. Upload all rotated images
-    16. Click continue button
-    17. Wait for inspector view
-    18. Stop for manual validation
+    3. Navigate to general settings
+    4. Fill general settings form
+    5. Continue to optional details
+    6. Fill optional details
+    7. Create batch
+    8. Extract batch ID
+    9. Select Magic Scan
+    10. Select card type and sides
+    11. Upload images
+    12. Continue after upload
+    13. Stop at inspector view for manual validation
     
     USER NOTE: Images with "front" or "back" in filename are automatically rotated.
     The workflow stops at inspector view for manual validation.
     """
     
-    def __init__(self, config_path: str, folder_path: Optional[str] = None, headless: bool = False):
+    def __init__(self, config_path: str, folder_path: Optional[str] = None, headless: bool = False, shared_driver=None, skip_login: bool = False):
         """
         Initialize workflow orchestrator.
         
@@ -84,6 +79,8 @@ class CardDealerProWorkflow:
             config_path: Path to JSON configuration file
             folder_path: Path to folder containing images (overrides config and sets batch_name)
             headless: Run browser in headless mode (no visible window)
+            shared_driver: Existing WebDriver to reuse (for multi-folder workflows)
+            skip_login: Skip login step if already logged in
             
         Raises:
             FileNotFoundError: If config file doesn't exist
@@ -94,11 +91,16 @@ class CardDealerProWorkflow:
         self.config_path = Path(config_path)
         self.folder_path = Path(folder_path) if folder_path else None
         self.headless = headless
-        self.driver = None
+        self.driver = shared_driver  # Use shared driver if provided
+        self.skip_login = skip_login
         self.waiter = None
         self.config = None
         self.batch_id = None
         self.rotated_image_paths = []
+        self.step_timings = {}  # Track time for each step
+        self.total_images = 0  # Track number of images in batch
+        self.current_step = "Init"  # Track the current/last executed step
+        self.last_error = None  # Store the last error message (if any)
         
         # Load environment variables from .env file
         # Try config/.env first, then fall back to root .env for backwards compatibility
@@ -223,6 +225,14 @@ class CardDealerProWorkflow:
         
         USER NOTE: Chrome browser must be installed on your system
         """
+        # Skip setup if driver already provided (shared driver from multi-folder)
+        if self.driver:
+            console.print("\n[cyan]Using existing WebDriver session...[/cyan]")
+            # Reinitialize waiter with existing driver
+            self.waiter = ElementWaiter(self.driver, SELENIUM_TIMEOUT)
+            console.print("[green]✓ WebDriver ready[/green]")
+            return
+        
         console.print("\n[cyan]Setting up Chrome WebDriver...[/cyan]")
         
         try:
@@ -273,15 +283,21 @@ class CardDealerProWorkflow:
         console.print("\n" + "="*60)
         console.print("[bold cyan]STEP 1: Rotate Images[/bold cyan]")
         console.print("="*60)
+        import time
+        # Track current step for summary/error reporting
+        self.current_step = "Rotate Images"
         
         try:
             from pathlib import Path
             from PIL import Image
+            start_time = time.time()
+            
             
             image_folder = Path(self.config['image_folder'])
             
             if not image_folder.exists():
                 console.print(f"[red]✗ Image folder not found: {image_folder}[/red]")
+                self.last_error = f"Image folder not found: {image_folder}"
                 return False
             
             # Find image files
@@ -293,6 +309,7 @@ class CardDealerProWorkflow:
             
             if not image_files:
                 console.print(f"[red]✗ No image files found in {image_folder}[/red]")
+                self.last_error = f"No image files found in {image_folder}"
                 return False
             
             # Rotation statistics
@@ -331,9 +348,15 @@ class CardDealerProWorkflow:
             # Store image paths for upload
             self.rotated_image_paths = [str(f) for f in image_files]
             
+            # Save timing and image count
+            elapsed = time.time() - start_time
+            self.step_timings['Rotate Images'] = elapsed
+            self.total_images = len(image_files)
+            
             # Summary
             console.print(f"\n[green]✓ Processed {len(image_files)} images[/green]")
             console.print(f"  Front: {stats['front']} | Back: {stats['back']} | Skipped: {stats['skipped']} | Errors: {stats['errors']}")
+            console.print(f"[dim]Time: {elapsed:.1f}s[/dim]")
             
             if stats['errors'] > 0:
                 console.print(f"[yellow]⚠ {stats['errors']} images had errors but workflow will continue[/yellow]")
@@ -342,7 +365,27 @@ class CardDealerProWorkflow:
             
         except Exception as e:
             console.print(f"[red]✗ Image rotation failed: {str(e)}[/red]")
+            self.last_error = f"Rotate Images failed: {str(e)}"
             return False
+    
+    def _track_step_time(self, step_name: str, step_func):
+        """Helper to track execution time for a step."""
+        import time
+        # Track current step for summary/error reporting
+        self.current_step = step_name
+        start_time = time.time()
+        try:
+            result = step_func()
+            elapsed = time.time() - start_time
+            self.step_timings[step_name] = elapsed
+            console.print(f"[dim]Time: {elapsed:.1f}s[/dim]")
+            return result
+        except Exception as e:
+            elapsed = time.time() - start_time
+            self.step_timings[step_name] = elapsed
+            # Record error for summary and re-raise to be handled upstream
+            self.last_error = f"{step_name} error: {str(e)}"
+            raise
     
     def _login(self) -> bool:
         """
@@ -411,21 +454,9 @@ class CardDealerProWorkflow:
             wait_for_selector=wait_selector
         )
     
-    def _click_create_batch(self) -> bool:
-        """
-        Step 4: (Skipped) Direct navigation already reached General Settings.
-        
-        Returns:
-            True if successful
-        """
-        console.print("\n" + "="*60)
-        console.print("[bold cyan]STEP 4: Skip Create Batch (Direct Nav)[/bold cyan]")
-        console.print("="*60)
-        return True
-    
     def _fill_general_settings(self) -> bool:
         """
-        Step 5: Fill general settings form.
+        Step 4: Fill general settings form.
         
         Fills batch name and all dropdown selections.
         
@@ -435,7 +466,7 @@ class CardDealerProWorkflow:
         USER NOTE: Dropdown values must match exactly what appears in the dropdown
         """
         console.print("\n" + "="*60)
-        console.print("[bold cyan]STEP 5: Fill General Settings[/bold cyan]")
+        console.print("[bold cyan]STEP 4: Fill General Settings[/bold cyan]")
         console.print("="*60)
         
         submitter = FormSubmitter(self.driver, self.waiter)
@@ -504,6 +535,23 @@ class CardDealerProWorkflow:
             else:
                 console.print("[dim]Skipping Title Template (missing selector or value)[/dim]")
             
+            # Select description template (optional)
+            if selectors.get('description_template_select') and settings.get('description_template'):
+                if selectors.get('description_template_select_type') == 'custom':
+                    submitter.select_custom_dropdown_option(
+                        selectors['description_template_select'],
+                        settings['description_template'],
+                        label="Description Template"
+                    )
+                else:
+                    submitter.select_dropdown_option(
+                        selectors['description_template_select'],
+                        settings['description_template'],
+                        label="Description Template"
+                    )
+            else:
+                console.print("[dim]Skipping Description Template (missing selector or value)[/dim]")
+            
             # Fill description (optional)
             if selectors.get('description_input') and settings.get('description'):
                 submitter.fill_text_input(
@@ -523,13 +571,13 @@ class CardDealerProWorkflow:
     
     def _click_continue_general_settings(self) -> bool:
         """
-        Step 6: Click continue button to proceed to optional details.
+        Step 5: Click continue button to proceed to optional details.
         
         Returns:
             True if successful
         """
         console.print("\n" + "="*60)
-        console.print("[bold cyan]STEP 6: Continue to Optional Details[/bold cyan]")
+        console.print("[bold cyan]STEP 5: Continue to Optional Details[/bold cyan]")
         console.print("="*60)
         
         submitter = FormSubmitter(self.driver, self.waiter)
@@ -546,7 +594,7 @@ class CardDealerProWorkflow:
     
     def _fill_optional_details(self) -> bool:
         """
-        Step 7: Fill optional details form (if configured).
+        Step 6: Fill optional details form (if configured).
         
         Skips this step if no optional_details in config.
         
@@ -556,7 +604,7 @@ class CardDealerProWorkflow:
         USER NOTE: Optional details are entirely optional. Leave empty {} to skip.
         """
         console.print("\n" + "="*60)
-        console.print("[bold cyan]STEP 7: Fill Optional Details[/bold cyan]")
+        console.print("[bold cyan]STEP 6: Fill Optional Details[/bold cyan]")
         console.print("="*60)
         
         optional_details = self.config.get('optional_details', {})
@@ -569,6 +617,10 @@ class CardDealerProWorkflow:
         
         try:
             for field_name, field_value in optional_details.items():
+                # Skip comment fields
+                if field_name.startswith('_'):
+                    continue
+                
                 # Get selector for this field from config
                 selector_key = f'optional_{field_name}'
                 selector = self.config['selectors'].get(selector_key)
@@ -578,12 +630,23 @@ class CardDealerProWorkflow:
                     console.print(f"[dim]Add '{selector_key}' to selectors in config.json[/dim]")
                     continue
                 
-                # Try to fill the field (text, dropdown, or click-only like radio/checkbox)
+                # Check if this is a custom dropdown
+                selector_type_key = f'{selector_key}_type'
+                is_custom = self.config['selectors'].get(selector_type_key) == 'custom'
+                
+                # Try to fill the field based on type
                 try:
-                    submitter.fill_text_input(selector, field_value, label=field_name)
+                    if is_custom:
+                        # Custom dropdown (Headless UI)
+                        submitter.select_custom_dropdown_option(selector, field_value, label=field_name)
+                    else:
+                        # Try text input first
+                        submitter.fill_text_input(selector, field_value, label=field_name)
                 except Exception:
                     # If text input fails, try as native <select> dropdown
                     try:
+                        submitter.select_dropdown_option(selector, field_value, label=field_name)
+                    except Exception:
                         submitter.select_dropdown_option(selector, field_value, label=field_name)
                     except Exception:
                         # As a final fallback, try clicking the element (for radio/checkbox/toggles)
@@ -602,13 +665,13 @@ class CardDealerProWorkflow:
     
     def _create_batch(self) -> bool:
         """
-        Step 8: Click create batch button to finalize batch creation.
+        Step 7: Click create batch button to finalize batch creation.
         
         Returns:
             True if successful
         """
         console.print("\n" + "="*60)
-        console.print("[bold cyan]STEP 8: Create Batch[/bold cyan]")
+        console.print("[bold cyan]STEP 7: Create Batch[/bold cyan]")
         console.print("="*60)
         
         submitter = FormSubmitter(self.driver, self.waiter)
@@ -625,7 +688,7 @@ class CardDealerProWorkflow:
     
     def _extract_batch_id(self) -> bool:
         """
-        Step 9: Extract batch_id from URL.
+        Step 8: Extract batch_id from URL.
         
         Returns:
             True if batch_id successfully extracted
@@ -634,7 +697,7 @@ class CardDealerProWorkflow:
         continue automatically. Check the URL pattern in config.py
         """
         console.print("\n" + "="*60)
-        console.print("[bold cyan]STEP 9: Extract Batch ID[/bold cyan]")
+        console.print("[bold cyan]STEP 8: Extract Batch ID[/bold cyan]")
         console.print("="*60)
         
         navigator = FormNavigator(self.driver, self.waiter)
@@ -652,13 +715,13 @@ class CardDealerProWorkflow:
     
     def _click_magic_scan(self) -> bool:
         """
-        Step 10: Click magic scan button.
+        Step 9: Click magic scan button.
         
         Returns:
             True if successful
         """
         console.print("\n" + "="*60)
-        console.print("[bold cyan]STEP 10: Click Magic Scan[/bold cyan]")
+        console.print("[bold cyan]STEP 9: Click Magic Scan[/bold cyan]")
         console.print("="*60)
         
         submitter = FormSubmitter(self.driver, self.waiter)
@@ -675,13 +738,13 @@ class CardDealerProWorkflow:
     
     def _select_sides(self) -> bool:
         """
-        Step 11: Navigate sides selection and continue.
+        Step 10: Navigate sides selection and continue.
         
         Returns:
             True if successful
         """
         console.print("\n" + "="*60)
-        console.print("[bold cyan]STEP 11: Select Sides[/bold cyan]")
+        console.print("[bold cyan]STEP 10: Select Sides[/bold cyan]")
         console.print("="*60)
         
         submitter = FormSubmitter(self.driver, self.waiter)
@@ -736,7 +799,7 @@ class CardDealerProWorkflow:
     
     def _upload_images(self) -> bool:
         """
-        Step 12: Upload all rotated images.
+        Step 11: Upload all rotated images.
         
         Sends all image file paths to the file upload input.
         
@@ -746,7 +809,7 @@ class CardDealerProWorkflow:
         USER NOTE: This uploads all successfully rotated images at once
         """
         console.print("\n" + "="*60)
-        console.print("[bold cyan]STEP 12: Upload Images[/bold cyan]")
+        console.print("[bold cyan]STEP 11: Upload Images[/bold cyan]")
         console.print("="*60)
         
         if not self.rotated_image_paths:
@@ -778,7 +841,7 @@ class CardDealerProWorkflow:
     
     def _click_continue_upload(self) -> bool:
         """
-        Step 13: Click continue after upload.
+        Step 12: Click continue after upload.
         
         Waits for all uploads to complete and button to become clickable.
         
@@ -786,7 +849,7 @@ class CardDealerProWorkflow:
             True if successful
         """
         console.print("\n" + "="*60)
-        console.print("[bold cyan]STEP 13: Continue After Upload[/bold cyan]")
+        console.print("[bold cyan]STEP 12: Continue After Upload[/bold cyan]")
         console.print("="*60)
         
         # Wait for uploads to process and button to become available
@@ -823,7 +886,7 @@ class CardDealerProWorkflow:
     
     def _reach_inspector_view(self) -> bool:
         """
-        Step 14: Wait for inspector view to load.
+        Step 13: Wait for inspector view to load.
         
         This is the final step where the workflow stops for manual validation.
         
@@ -834,7 +897,7 @@ class CardDealerProWorkflow:
         The script will keep the browser open until you close it or press Enter.
         """
         console.print("\n" + "="*60)
-        console.print("[bold cyan]STEP 14: Inspector View[/bold cyan]")
+        console.print("[bold cyan]STEP 13: Inspector View[/bold cyan]")
         console.print("="*60)
         
         # Wait for inspector view to load
@@ -874,24 +937,31 @@ class CardDealerProWorkflow:
         console.print(table)
         console.print()
     
-    def _cleanup(self):
+    def _cleanup(self, wait_for_user=True):
         """
         Clean up resources and close browser.
+        
+        Args:
+            wait_for_user: If True, wait for user input before closing browser
         
         USER NOTE: Browser will close after you finish manual validation
         """
         if self.driver:
-            console.print("\n[dim]Press Enter to close browser and exit...[/dim]")
-            input()
+            if wait_for_user:
+                console.print("\n[dim]Press Enter to close browser and exit...[/dim]")
+                input()
             console.print("[dim]Closing browser...[/dim]")
             self.driver.quit()
             console.print("[green]✓ Browser closed[/green]")
     
-    def run(self) -> bool:
+    def run(self, keep_browser_open=False) -> bool:
         """
         Execute the complete workflow.
         
-        Runs all 14 steps in sequence, stopping at inspector view for manual validation.
+        Runs all 13 steps in sequence, stopping at inspector view for manual validation.
+        
+        Args:
+            keep_browser_open: If True, skip cleanup (for multi-folder workflows)
         
         Returns:
             True if workflow completed successfully
@@ -906,71 +976,95 @@ class CardDealerProWorkflow:
             # Step 1: Rotate images
             if not self._rotate_images():
                 console.print("[red]✗ Workflow failed at image rotation[/red]")
+                if not self.last_error:
+                    self.last_error = "Rotate Images returned False"
                 return False
             
-            # Step 2: Login
-            if not self._login():
-                console.print("[red]✗ Workflow failed at login[/red]")
-                return False
+            # Step 2: Login (skip if already logged in)
+            if not self.skip_login:
+                if not self._track_step_time('Login', self._login):
+                    console.print("[red]✗ Workflow failed at login[/red]")
+                    if not self.last_error:
+                        self.last_error = "Login returned False"
+                    return False
+            else:
+                console.print("\n[dim]Skipping login (already authenticated)[/dim]")
             
             # Step 3: Navigate to batches
-            if not self._navigate_to_batches():
+            if not self._track_step_time('Navigate', self._navigate_to_batches):
                 console.print("[red]✗ Workflow failed at batches navigation[/red]")
+                if not self.last_error:
+                    self.last_error = "Navigate returned False"
                 return False
             
-            # Step 4: Click create batch
-            if not self._click_create_batch():
-                console.print("[red]✗ Workflow failed at create batch click[/red]")
-                return False
-            
-            # Step 5: Fill general settings
-            if not self._fill_general_settings():
+            # Step 4: Fill general settings
+            if not self._track_step_time('Fill General Settings', self._fill_general_settings):
                 console.print("[red]✗ Workflow failed at general settings[/red]")
+                if not self.last_error:
+                    self.last_error = "Fill General Settings returned False"
                 return False
             
-            # Step 6: Continue to optional details
-            if not self._click_continue_general_settings():
+            # Step 5: Continue to optional details
+            if not self._track_step_time('Continue General', self._click_continue_general_settings):
                 console.print("[red]✗ Workflow failed at continue click[/red]")
+                if not self.last_error:
+                    self.last_error = "Continue General returned False"
                 return False
             
-            # Step 7: Fill optional details
-            if not self._fill_optional_details():
+            # Step 6: Fill optional details
+            if not self._track_step_time('Fill Optional Details', self._fill_optional_details):
                 console.print("[red]✗ Workflow failed at optional details[/red]")
+                if not self.last_error:
+                    self.last_error = "Fill Optional Details returned False"
                 return False
             
-            # Step 8: Create batch
-            if not self._create_batch():
+            # Step 7: Create batch
+            if not self._track_step_time('Create Batch Submit', self._create_batch):
                 console.print("[red]✗ Workflow failed at batch creation[/red]")
+                if not self.last_error:
+                    self.last_error = "Create Batch Submit returned False"
                 return False
             
-            # Step 9: Extract batch ID
-            if not self._extract_batch_id():
+            # Step 8: Extract batch ID
+            if not self._track_step_time('Extract Batch ID', self._extract_batch_id):
                 console.print("[red]✗ Workflow failed at batch ID extraction[/red]")
+                if not self.last_error:
+                    self.last_error = "Extract Batch ID returned False"
                 return False
             
-            # Step 10: Magic scan
-            if not self._click_magic_scan():
+            # Step 9: Magic scan
+            if not self._track_step_time('Magic Scan', self._click_magic_scan):
                 console.print("[red]✗ Workflow failed at magic scan[/red]")
+                if not self.last_error:
+                    self.last_error = "Magic Scan returned False"
                 return False
             
-            # Step 11: Select sides
-            if not self._select_sides():
+            # Step 10: Select sides
+            if not self._track_step_time('Select Sides', self._select_sides):
                 console.print("[red]✗ Workflow failed at sides selection[/red]")
+                if not self.last_error:
+                    self.last_error = "Select Sides returned False"
                 return False
             
-            # Step 12: Upload images
-            if not self._upload_images():
+            # Step 11: Upload images
+            if not self._track_step_time('Upload Images', self._upload_images):
                 console.print("[red]✗ Workflow failed at image upload[/red]")
+                if not self.last_error:
+                    self.last_error = "Upload Images returned False"
                 return False
             
-            # Step 13: Continue after upload
-            if not self._click_continue_upload():
+            # Step 12: Continue after upload
+            if not self._track_step_time('Upload Continue', self._click_continue_upload):
                 console.print("[red]✗ Workflow failed at upload continue[/red]")
+                if not self.last_error:
+                    self.last_error = "Upload Continue returned False"
                 return False
             
-            # Step 14: Reach inspector view
-            if not self._reach_inspector_view():
+            # Step 13: Reach inspector view
+            if not self._track_step_time('Inspector View', self._reach_inspector_view):
                 console.print("[red]✗ Workflow failed at inspector view[/red]")
+                if not self.last_error:
+                    self.last_error = "Inspector View returned False"
                 return False
             
             # Print summary
@@ -984,12 +1078,16 @@ class CardDealerProWorkflow:
             return False
             
         except Exception as e:
+            # Ensure last_error and current_step are recorded
+            if not self.last_error:
+                self.last_error = str(e)
             console.print(f"\n[bold red]✗ WORKFLOW FAILED: {str(e)}[/bold red]")
             return False
             
         finally:
-            # Always cleanup
-            self._cleanup()
+            # Cleanup unless told to keep browser open for next folder
+            if not keep_browser_open:
+                self._cleanup()
 
 
 def main():
@@ -1003,9 +1101,20 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python scripts/image_upload_workflow.py --config my_batch.json --folder path/to/images
-  python scripts/image_upload_workflow.py --config my_batch.json --folder A3
-  python scripts/image_upload_workflow.py --config my_batch.json --folder A3 --headless
+  # Single folder (uses default config)
+  python scripts/image_upload_workflow.py --folder A3
+  
+  # Multiple folders
+  python scripts/image_upload_workflow.py --folder A3 B5 C2
+  
+  # With custom config
+  python scripts/image_upload_workflow.py --config my_config.json --folder A3
+  
+  # With headless mode
+  python scripts/image_upload_workflow.py --folder A3 B5 --headless
+  
+  # Full paths
+  python scripts/image_upload_workflow.py --folder /path/A3 /path/B5
 
 For more information, see docs/USAGE.md
         """
@@ -1013,13 +1122,14 @@ For more information, see docs/USAGE.md
     
     parser.add_argument(
         '--config',
-        required=True,
-        help='Path to JSON configuration file'
+        default='config/upload_config.json',
+        help='Path to JSON configuration file (default: config/upload_config.json)'
     )
     
     parser.add_argument(
         '--folder',
-        help='Folder name or path containing images. If just a name (e.g., "A3"), uses default_images_path from config. Sets batch_name to folder name.'
+        nargs='+',
+        help='One or more folder names or paths. Examples: --folder A3 B5 C2 OR --folder /full/path/A3 /full/path/B5'
     )
     
     parser.add_argument(
@@ -1030,15 +1140,136 @@ For more information, see docs/USAGE.md
     
     args = parser.parse_args()
     
+    # Ensure at least one folder is provided
+    if not args.folder:
+        console.print("[red]Error: --folder argument is required[/red]")
+        console.print("Example: python scripts/image_upload_workflow.py --config config.json --folder A3")
+        sys.exit(1)
+    
+    folders = args.folder
+    total_folders = len(folders)
+    results = []  # Track results: {folder, status, step, error, images, time}
+    shared_driver = None  # Shared WebDriver across all folders
+    
+    console.print(f"\n[bold cyan]Starting batch workflow for {total_folders} folder(s)[/bold cyan]\n")
+    
     try:
-        workflow = CardDealerProWorkflow(args.config, args.folder, args.headless)
-        success = workflow.run()
-        
-        sys.exit(0 if success else 1)
-        
+        for idx, folder in enumerate(folders, 1):
+            console.print("\n" + "="*70)
+            console.print(f"[bold magenta]PROCESSING FOLDER {idx}/{total_folders}: {folder}[/bold magenta]")
+            console.print("="*70 + "\n")
+            workflow = None
+            
+            try:
+                # First folder: create new workflow with new driver
+                # Subsequent folders: reuse driver and skip login
+                if idx == 1:
+                    workflow = CardDealerProWorkflow(args.config, folder, args.headless)
+                else:
+                    workflow = CardDealerProWorkflow(args.config, folder, args.headless, 
+                                                    shared_driver=shared_driver, skip_login=True)
+                
+                # For multi-folder: keep browser open between batches
+                keep_open = idx < total_folders
+                success = workflow.run(keep_browser_open=keep_open)
+                
+                # Save driver reference for next folder
+                if idx == 1:
+                    shared_driver = workflow.driver
+                
+                if success:
+                    results.append({
+                        "folder": folder, 
+                        "status": "success", 
+                        "step": "Complete", 
+                        "error": None,
+                        "images": workflow.total_images,
+                        "time": sum(workflow.step_timings.values())
+                    })
+                    console.print(f"\n[bold green]✓ Folder {idx}/{total_folders} completed: {folder}[/bold green]")
+                else:
+                    results.append({
+                        "folder": folder, 
+                        "status": "failed", 
+                        "step": getattr(workflow, 'current_step', 'Unknown'), 
+                        "error": getattr(workflow, 'last_error', 'Workflow returned False'),
+                        "images": workflow.total_images if hasattr(workflow, 'total_images') else 0,
+                        "time": sum(workflow.step_timings.values()) if hasattr(workflow, 'step_timings') else 0
+                    })
+                    console.print(f"\n[bold red]✗ Folder {idx}/{total_folders} failed: {folder}[/bold red]")
+                    
+            except Exception as e:
+                error_msg = str(e)
+                # Prefer step/error recorded by workflow, fall back to parsing
+                step = getattr(workflow, 'current_step', 'Unknown')
+                error_value = getattr(workflow, 'last_error', error_msg)
+                
+                results.append({
+                    "folder": folder, 
+                    "status": "error", 
+                    "step": step, 
+                    "error": error_value,
+                    "images": workflow.total_images if hasattr(workflow, 'total_images') else 0,
+                    "time": sum(workflow.step_timings.values()) if hasattr(workflow, 'step_timings') else 0
+                })
+                console.print(f"\n[bold red]✗ Error processing folder {folder}: {error_msg}[/bold red]")
+                
+                # Save driver reference even if failed (for next folder)
+                if idx == 1 and workflow.driver:
+                    shared_driver = workflow.driver
+            
+            # Small pause between batches (except after last one)
+            if idx < total_folders:
+                console.print("\n[dim]Pausing 3 seconds before next folder...[/dim]")
+                import time
+                time.sleep(3)
+    
+    except KeyboardInterrupt:
+        console.print("\n[yellow]⚠ Workflow interrupted by user[/yellow]")
     except Exception as e:
         console.print(f"\n[bold red]Fatal error: {str(e)}[/bold red]")
-        sys.exit(1)
+    finally:
+        # ALWAYS show summary, even if interrupted or errored
+        console.print("\n" + "="*70)
+        console.print("[bold cyan]BATCH WORKFLOW SUMMARY[/bold cyan]")
+        console.print("="*70)
+        
+        from rich.table import Table
+        summary_table = Table(show_header=True, header_style="bold cyan")
+        summary_table.add_column("#", style="dim", width=4)
+        summary_table.add_column("Folder", style="cyan", width=15)
+        summary_table.add_column("Images", style="magenta", width=8, justify="right")
+        summary_table.add_column("Time", style="blue", width=10, justify="right")
+        summary_table.add_column("Status", width=12)
+        summary_table.add_column("Step", style="yellow", width=20)
+        summary_table.add_column("Error", style="dim")
+        
+        successful = 0
+        failed = 0
+        
+        for idx, result in enumerate(results, 1):
+            if result["status"] == "success":
+                status_text = "[green]✓ Success[/green]"
+                successful += 1
+                error_text = ""
+            else:
+                status_text = "[red]✗ Failed[/red]"
+                failed += 1
+                error_text = result["error"] or "Unknown error"
+            
+            step_text = result.get("step", "Unknown")
+            images = result.get("images", 0)
+            time_taken = result.get("time", 0)
+            time_str = f"{time_taken:.1f}s" if time_taken > 0 else "-"
+            
+            summary_table.add_row(str(idx), result["folder"], str(images), time_str, status_text, step_text, error_text)
+        
+        console.print(summary_table)
+        console.print()
+        console.print(f"Total: {total_folders} | [green]Success: {successful}[/green] | [red]Failed: {failed}[/red]")
+        console.print("="*70 + "\n")
+        
+        sys.exit(0 if failed == 0 else 1)
 
 
 if __name__ == "__main__":

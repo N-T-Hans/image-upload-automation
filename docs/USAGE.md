@@ -7,53 +7,47 @@ Complete reference for running the CardDealerPro Image Upload Automation.
 ### Basic Command
 
 ```bash
-python scripts/image_upload_workflow.py --config <path-to-config.json>
+python3 scripts/image_upload_workflow.py --folder <folder-or-absolute-path>
 ```
 
 ### Command Options
 
 | Option | Required | Description |
 |--------|----------|-------------|
-| `--config` | Yes | Path to JSON configuration file |
+| `--folder` | Yes | One or more folder names or absolute paths to image folders |
+| `--config` | No  | Path to JSON configuration (default: `config/upload_config.json`) |
 | `--headless` | No | Run browser in headless mode (no visible window) |
 
 ### Examples
 
-**Standard run with visible browser:**
+**Single folder (default config):**
 ```bash
-python scripts/image_upload_workflow.py --config my_batch.json
+python3 scripts/image_upload_workflow.py --folder Test1
 ```
 
-**Headless run (background mode):**
+**Multiple folders (shared session, single login):**
 ```bash
-python scripts/image_upload_workflow.py --config my_batch.json --headless
+python3 scripts/image_upload_workflow.py --folder A3 B5 C2
 ```
 
-**Using absolute path to config:**
+**Headless run (no window):**
 ```bash
-python scripts/image_upload_workflow.py --config /Users/username/configs/batch_01.json
+python3 scripts/image_upload_workflow.py --folder Test1 --headless
+```
+
+**Using absolute folder path:**
+```bash
+python3 scripts/image_upload_workflow.py --folder /Users/you/Downloads/CardTest/Test1
 ```
 
 ## Workflow Stages
 
-The script executes 14 major stages:
+The script executes 13 major stages:
 
 ### Stage 1: Image Rotation
-- Reads EXIF orientation from images
-- Rotates JPEGs (creates copies in `rotated_images/`)
-- Rotates other formats in-place
-- Shows progress bar with file names
-
-**Console Output:**
-```
-Found 50 images to process
-Rotating images... ━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00
-✓ Rotated 45/50 images (5 skipped, 0 failed)
-```
-
-**What to check:**
-- Failed images are logged with error messages
-- Verify rotated image count matches expectations
+- Rotates images in-place using EXIF orientation (no copy directory)
+- `front` in filename → orientation 8; `back` → orientation 6; others skipped
+- Logs counts: Front, Back, Skipped, Errors
 
 ### Stage 2: Login
 - Navigates to login URL
@@ -74,7 +68,7 @@ Attempting login (attempt 1/3)...
 - **Timeout**: Increase `SELENIUM_TIMEOUT` in `config.py`
 - **Wrong page**: Verify `success_url_pattern` in config
 
-### Stage 3-8: Batch Creation
+### Stage 3-7: Batch Creation
 - Navigates through form pages
 - Fills general settings
 - Fills optional details (if configured)
@@ -94,7 +88,7 @@ STEP 5: Fill General Settings
 - **Option not found in dropdown**: Value doesn't match exactly
 - **Click intercepted**: Another element is covering the button
 
-### Stage 9: Batch ID Extraction
+### Stage 8: Batch ID Extraction
 - Extracts batch_id from URL using regex
 - Falls back to DOM selectors if regex fails
 
@@ -109,7 +103,7 @@ Current URL: https://v2.carddealerpro.com/batches/ABC123/add/types
 - **Extraction failed**: URL pattern changed, update `BATCH_ID_REGEX` in `config.py`
 - Check console for current URL and adjust regex
 
-### Stage 10-13: Image Upload
+### Stage 9-12: Image Upload
 - Navigates through magic scan and sides selection
 - Uploads all rotated images
 - Clicks continue
@@ -126,7 +120,7 @@ Uploading 45 files...
 - **Upload fails**: Check file paths are absolute
 - **Timeout**: Large batches take time, increase timeout
 
-### Stage 14: Inspector View
+### Stage 13: Inspector View
 - Reaches inspector view
 - Pauses for manual validation
 - Keeps browser open
@@ -173,16 +167,15 @@ Shows:
 
 ### Summary Tables
 
+Single-folder summary shows a per-stage overview. The batch summary (especially for multi-folder runs) includes:
+
 ```
-Workflow Results
-┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┓
-┃ Stage            ┃ Status     ┃ Details             ┃
-┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━┩
-│ Image Rotation   │ ✓ Complete │ 45 images ready     │
-│ Login            │ ✓ Complete │ Authenticated       │
-│ Batch Creation   │ ✓ Complete │ Batch ID: ABC123    │
-│ Image Upload     │ ✓ Complete │ 45 files uploaded   │
-└──────────────────┴────────────┴─────────────────────┘
+┏━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━┓
+┃ #    ┃ Folder  ┃   Images ┃       Time ┃ Status       ┃ Step                 ┃ Error ┃
+┡━━━━━━╇━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━┩
+│ 1    │ Test1   │       50 │     120.5s │ ✓ Success    │ Complete             │       │
+│ 2    │ B5      │       42 │      98.3s │ ✗ Failed     │ Upload Images        │ Timeout waiting for input │
+└──────┴─────────┴──────────┴────────────┴──────────────┴──────────────────────┴───────┘
 ```
 
 ## Error Messages and Solutions
@@ -284,7 +277,7 @@ Solution:
 ```
 Solution:
 1. Image rotation may have failed for some files
-2. Check image_folder path is correct
+2. Check default_images_path is correct and folder exists
 3. Verify images exist and are readable
 4. Check file permissions
 ```
@@ -374,28 +367,26 @@ If something goes wrong:
 3. **Stable internet** - Avoid WiFi if possible
 4. **Close other applications** - Free up system resources
 
-## Advanced Usage
+### Advanced Usage
 
-### Running Multiple Batches
-
-```bash
-# Create multiple configs
-configs/batch_01.json
-configs/batch_02.json
-configs/batch_03.json
-
-# Run sequentially
-python scripts/image_upload_workflow.py --config configs/batch_01.json
-python scripts/image_upload_workflow.py --config configs/batch_02.json
-python scripts/image_upload_workflow.py --config configs/batch_03.json
-```
-
-### Testing Image Rotation Only
+### Running Multiple Folders (Single Session)
 
 ```bash
-# Test rotation without uploading
-python tools/image_tools.py /path/to/images
+python3 scripts/image_upload_workflow.py --folder A3 B5 C2
 ```
+The script reuses the same browser session and skips login after the first folder.
+
+### Standalone Rotation (Optional)
+
+If you want to rotate images without running the full workflow:
+
+```bash
+python3 scripts/rotate_images.py /path/to/folder
+```
+
+Notes:
+- The main workflow performs rotation automatically in Step 1.
+- This utility is helpful for pre-processing or validating filename patterns.
 
 ### Custom Timeout
 
@@ -416,7 +407,7 @@ The script returns different exit codes:
 
 Use in scripts:
 ```bash
-python scripts/image_upload_workflow.py --config my_batch.json
+python3 scripts/image_upload_workflow.py --folder Test1
 if [ $? -eq 0 ]; then
     echo "Success!"
 else

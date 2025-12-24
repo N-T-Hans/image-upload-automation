@@ -1,10 +1,6 @@
 # Template Files Setup Guide
 
-This guide explains how to use the template files in this project to get started quickly.
-
-## Overview
-
-This project includes template files that you need to copy and customize. **Never edit the template files directly** - always make a copy first.
+This guide explains how to use the provided templates to set up credentials and the default configuration (`config/upload_config.json`). The workflow uses this default config automatically—no `--config` flag is required unless you want to use a different path.
 
 ---
 
@@ -74,9 +70,9 @@ cp templates/upload_config.template.json config/upload_config.json
 
 The template has sections marked with `<< USER: REPLACE >>` that you must fill in:
 
-#### Required: Image Folder
+#### Required: Image Base Path
 ```json
-"image_folder": "/Users/yourname/Desktop/card_images"
+"default_images_path": "/Users/yourname/Desktop/card_images"
 ```
 
 #### Required: Batch Settings
@@ -85,8 +81,8 @@ The template has sections marked with `<< USER: REPLACE >>` that you must fill i
   "batch_name": "2024 Baseball Cards - Set 1",
   "batch_type": "Raw",
   "sport_type": "Baseball",
-  "title_template": "Standard",
-  "description": "Vintage baseball cards from 1990s"
+  "title_template": "Default CDP Template",
+  "description_template": "Default CDP Template"
 }
 ```
 
@@ -98,8 +94,32 @@ You must find these using Chrome DevTools (see `docs/SELECTOR_GUIDE.md`):
   "username_input": "#user_email",
   "password_input": "#user_password",
   "login_button": "button[type='submit']",
-  "create_batch_button": "a.btn-primary[href*='new']",
-  // ... and 20+ more selectors
+
+  "batch_name_input": "input.input-controller",
+  "batch_type_select": "button[aria-haspopup='listbox'][data-testid='batch-type']",
+  "batch_type_select_type": "custom",
+  "sport_type_select": "button[aria-haspopup='listbox'][data-testid='sport-type']",
+  "sport_type_select_type": "custom",
+  "title_template_select": "button[aria-haspopup='listbox'][data-testid='title-template']",
+  "title_template_select_type": "custom",
+  "description_template_select": "button[aria-haspopup='listbox'][data-testid='description-template']",
+  "description_template_select_type": "custom",
+
+  "continue_button_general": "button[type='submit']",
+
+  "create_batch_submit": "button[type='submit']",
+
+  "magic_scan_button": "button[data-testid='magic-scan']",
+
+  "scan_card_type_radio": "button[data-testid='raw']",
+  "scan_sides_option": "button[data-testid='front-back']",
+
+  "upload_file_input": "input#searchImage[type='file']",
+  "upload_continue_button": "button[data-testid='continue']",
+
+  "optional_condition": "button[aria-haspopup='listbox'][data-testid='condition']",
+  "optional_condition_type": "custom",
+  "optional_sale_price": "input[name='sale_price']"
 }
 ```
 
@@ -108,8 +128,8 @@ You must find these using Chrome DevTools (see `docs/SELECTOR_GUIDE.md`):
 #### Optional: Additional Details
 ```json
 "optional_details": {
-  "field1": "value1",
-  "field2": "value2"
+  "condition": "Lightly played",
+  "sale_price": "1.00"
 }
 ```
 Remove this section if not needed.
@@ -119,7 +139,7 @@ Remove this section if not needed.
 **Minimal Config** (fastest setup):
 ```json
 {
-  "image_folder": "/path/to/images",
+  "default_images_path": "/path/to/images",
   "urls": { "login": "...", "batches": "...", "general_settings": "..." },
   "general_settings": { "batch_name": "Test", "batch_type": "Raw", "sport_type": "Baseball" },
   "selectors": { /* all required selectors */ }
@@ -129,7 +149,7 @@ Remove this section if not needed.
 **Full Config** (with all options):
 ```json
 {
-  "image_folder": "/path/to/images",
+  "default_images_path": "/path/to/images",
   "urls": { /* all URLs */ },
   "general_settings": { /* all settings */ },
   "optional_details": { /* custom fields */ },
@@ -145,27 +165,15 @@ Remove this section if not needed.
 Once you've created your config file, run the workflow:
 
 ```bash
-python scripts/image_upload_workflow.py --config config/upload_config.json
+python3 scripts/image_upload_workflow.py --folder Test1
 ```
 
-### Multiple Configurations
+### Multiple Folders in One Run
 
-You can create multiple configuration files for different batches in the `config/` folder:
+You can process multiple folders sequentially with a single login/session:
 
-```
-config/
-├── .env                              # One .env for all configs
-├── .gitkeep                          # Keeps folder in git
-├── baseball_batch1.json             # First batch
-├── baseball_batch2.json             # Second batch
-├── basketball_cards.json            # Different sport
-└── vintage_collection.json          # Different collection
-```
-
-Run different batches:
 ```bash
-python scripts/image_upload_workflow.py --config config/baseball_batch1.json
-python scripts/image_upload_workflow.py --config config/basketball_cards.json
+python3 scripts/image_upload_workflow.py --folder A3 B5 C2
 ```
 
 ---
@@ -195,13 +203,8 @@ cp templates/env.template config/.env
 cp templates/upload_config.template.json config/upload_config.json
 # Edit config/upload_config.json with your batch details and selectors
 
-# 4. Test in pieces
-python tests/test_image_rotation.py /path/to/images
-python tests/test_login_navigation.py --config config/upload_config.json
-python tests/test_upload_config.py --config config/upload_config.json
-
-# 5. Run full workflow
-python scripts/image_upload_workflow.py --config config/upload_config.json
+# 4. Run full workflow with folder parameter
+python3 scripts/image_upload_workflow.py --folder Test1
 ```
 
 ---

@@ -126,6 +126,33 @@ document.querySelectorAll('.button').length
 **Best selector:**
 - `#sport-select` or `select[name="sport_type"]`
 
+### Custom Dropdowns (Headless UI)
+
+Some dropdowns are implemented with custom components (not native `<select>`). For these:
+
+- Use the button element that opens the listbox (often `aria-haspopup="listbox"`).
+- In `selectors`, add the `_select` key and set an accompanying `_select_type` to `"custom"`.
+
+**Config examples:**
+```json
+{
+  "selectors": {
+    "title_template_select": "button[aria-haspopup='listbox'][data-testid='title-template']",
+    "title_template_select_type": "custom",
+
+    "description_template_select": "button[aria-haspopup='listbox'][data-testid='description-template']",
+    "description_template_select_type": "custom",
+
+    "optional_condition": "button[aria-haspopup='listbox'][data-testid='condition']",
+    "optional_condition_type": "custom",
+
+    "optional_sale_price": "input[name='sale_price']"
+  }
+}
+```
+
+With these settings, the workflow will open the custom dropdown and click the matching option by visible text.
+
 ### Buttons
 
 **Look for:**
@@ -173,7 +200,8 @@ File inputs are often **hidden** visually but still in the DOM.
 ```
 
 **Selector:**
-- `input[type="file"][name="images"]`
+- Prefer a stable hidden input: e.g., `input#searchImage[type="file"]`
+  - The workflow detects hidden file inputs and sends file paths directly.
 
 ## Common Selector Patterns
 

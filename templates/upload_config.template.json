@@ -8,8 +8,9 @@
   "_comment_instructions4": "4. Test with a small batch first to verify selectors work",
   "_comment_header4": "=================================================================",
   
-  "image_folder": "<< USER: REPLACE WITH ABSOLUTE PATH TO YOUR IMAGE FOLDER >>",
-  "_comment_image_folder": "Example: /Users/username/Desktop/card_images or C:\\Users\\username\\Desktop\\card_images",
+  "default_images_path": "<< USER: REPLACE WITH BASE PATH WHERE IMAGE FOLDERS ARE STORED >>",
+  "_comment_default_images_path": "Example: /Users/username/Desktop/card_images or C:\\Users\\username\\Desktop\\card_images",
+  "_comment_usage": "Workflow uses: --folder Test1 will use {default_images_path}/Test1",
   
   "urls": {
     "_comment": "URLs for CardDealerPro workflow - verify these are current",
@@ -42,7 +43,8 @@
     "_comment": "<< USER: ADD OPTIONAL FIELDS HERE OR LEAVE AS EMPTY OBJECT {} >>",
     "_comment2": "These fields are completely optional - leave as {} to skip",
     "_comment3": "If you add fields here, also add corresponding selectors below",
-    "_example_field": "Example: 'storage_location': 'Warehouse A, Shelf 3'"
+    "_example_condition": "Example: 'condition': 'Lightly played'",
+    "_example_sale_price": "Example: 'sale_price': '1.00'"
   },
   
   "selectors": {
@@ -90,12 +92,14 @@
     "create_batch_submit": "<< USER: CSS SELECTOR FOR CREATE BATCH BUTTON ON OPTIONAL DETAILS PAGE >>",
     "_example_create_submit": "Example: 'button.create-batch' or 'button[type=\"submit\"]'",
     
+    "_comment_optional_fields": "Add selectors for optional fields here using format: optional_{field_name}",
+    "_example_optional_condition": "Example: 'optional_condition': '//label[contains(text(),\"Condition\")]/following-sibling::button[@aria-haspopup=\"listbox\"]'",
+    "_example_optional_condition_type": "Example: 'optional_condition_type': 'custom' (for Headless UI dropdowns)",
+    "_example_optional_sale_price": "Example: 'optional_sale_price': 'input[type=\"number\"][placeholder=\"0.00\"]'",
+    
     "_section_batch_workflow": "--- BATCH WORKFLOW SELECTORS ---",
     "magic_scan_button": "<< USER: CSS SELECTOR FOR MAGIC SCAN BUTTON >>",
     "_example_magic_scan": "Example: 'button.magic-scan' or 'button[data-action=\"magic-scan\"]'",
-    
-    "sides_continue_button": "<< USER: CSS SELECTOR FOR CONTINUE BUTTON ON SIDES PAGE >>",
-    "_example_sides_continue": "Example: 'button.continue' or 'button[type=\"submit\"]'",
     
     "_section_upload": "--- UPLOAD PAGE SELECTORS ---",
     "upload_file_input": "<< USER: CSS SELECTOR FOR FILE UPLOAD INPUT >>",

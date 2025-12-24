@@ -21,9 +21,9 @@ If you have the project files, navigate to the project directory:
 cd /path/to/image-upload-automation
 ```
 
-### 2. Create Python Virtual Environment
+### 2. Create Python Virtual Environment ⭐ RECOMMENDED
 
-This isolates the project dependencies from your system Python.
+**Why?** Isolates project dependencies to avoid conflicts with other Python projects and system packages.
 
 **On macOS/Linux:**
 ```bash
@@ -39,7 +39,9 @@ venv\Scripts\activate
 
 You should see `(venv)` in your terminal prompt when the virtual environment is active.
 
-### 3. Install Dependencies
+💡 **To deactivate later**: Run `deactivate` to exit the virtual environment.
+
+### 3. Install Dependencies ⚠️ Run with venv activated
 
 With the virtual environment activated:
 
@@ -74,7 +76,7 @@ CDP_PASSWORD=your_actual_password
 
 ⚠️ **IMPORTANT**: The entire `config/` folder is in `.gitignore` and will not be committed!
 
-📚 **For detailed template setup help**, see `templates/README.md` or `docs/TEMPLATE_SETUP.md` for step-by-step guidance.
+📚 For template help, see `templates/README.md`. The workflow uses `config/upload_config.json` by default.
 
 ### 5. Create Your Configuration File
 
@@ -88,13 +90,13 @@ cp templates/upload_config.template.json config/upload_config.json
 nano config/upload_config.json  # or use any text editor
 ```
 
-**You MUST replace all fields marked with `<< USER: ... >>`**
+Replace any placeholders as needed for your account.
 
 #### Essential Fields to Update:
 
-1. **image_folder** - Absolute path to your images
+1. **default_images_path** - Base path where image folders are stored
    ```json
-   "image_folder": "/Users/yourname/Desktop/card_images"
+   "default_images_path": "/Users/yourname/Desktop/card_images"
    ```
 
 2. **general_settings** - Batch details
@@ -103,8 +105,8 @@ nano config/upload_config.json  # or use any text editor
      "batch_name": "2024 Topps Chrome Baseball",
      "batch_type": "Sports Cards",
      "sport_type": "Baseball",
-     "title_template": "Standard Template",
-     "description": "Mint condition cards"
+     "title_template": "Default CDP Template",
+     "description_template": "Default CDP Template"
    }
    ```
 
@@ -131,15 +133,14 @@ Before running the script, you need to find CSS selectors for all form elements.
 Before uploading a large batch, test with a few images:
 
 ```bash
-python scripts/image_upload_workflow.py --config my_batch.json
+python3 scripts/image_upload_workflow.py --folder Test1
 ```
 
-The script will:
-1. ✓ Rotate images based on EXIF data
-2. ✓ Login to CardDealerPro
-3. ✓ Navigate through the workflow
-4. ✓ Upload images
-5. ⏸️ Stop at inspector view for your validation
+The script will run a 13-step workflow:
+1) Rotate images → 2) Login → 3) Navigate → 4) Fill General Settings →
+5) Continue → 6) Optional Details → 7) Create Batch → 8) Extract Batch ID →
+9) Magic Scan → 10) Select Sides → 11) Upload Images → 12) Continue →
+13) Inspector View (pause)
 
 ### 8. Manual Validation
 
@@ -179,19 +180,18 @@ When the workflow reaches the inspector view:
 
 ## Command Reference
 
-### Basic Usage
 ```bash
-python scripts/image_upload_workflow.py --config my_batch.json
-```
+# Single folder (default config path)
+python3 scripts/image_upload_workflow.py --folder Test1
 
-### Headless Mode (No Browser Window)
-```bash
-python scripts/image_upload_workflow.py --config my_batch.json --headless
-```
+# Multiple folders
+python3 scripts/image_upload_workflow.py --folder A3 B5 C2
 
-### Test Image Rotation Only
-```bash
-python tools/image_tools.py /path/to/image/folder
+# Headless mode
+python3 scripts/image_upload_workflow.py --folder Test1 --headless
+
+# Rotate images only (optional)
+python3 scripts/rotate_images.py /path/to/image/folder
 ```
 
 ## Next Steps
@@ -201,7 +201,6 @@ Once you have a successful test run:
 1. **Save your working config** for future batches
 2. **Document your selectors** in case the website changes
 3. **Read [USAGE.md](USAGE.md)** for advanced features
-4. **Check [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md)** for future enhancements
 
 ## Getting Help
 
@@ -218,13 +217,13 @@ After setup, your project should look like:
 
 ```
 image-upload-automation/
-├── .env                    # Your credentials (don't commit!)
-├── my_batch.json          # Your config (don't commit!)
-├── config_templates/      # Example configs
-├── docs/                  # Documentation
-├── scripts/               # Main workflow script
-├── tools/                 # Automation utilities
-└── venv/                  # Virtual environment
+├── config/
+│   ├── .env                     # Your credentials (don't commit!)
+│   └── upload_config.json       # Your config (don't commit!)
+├── docs/                        # Documentation
+├── scripts/                     # Main workflow script
+├── tools/                       # Automation utilities
+└── venv/                        # Virtual environment
 ```
 
 ## Deactivating Virtual Environment
@@ -240,5 +239,5 @@ deactivate
 **Ready to start?** Run your first batch:
 
 ```bash
-python scripts/image_upload_workflow.py --config my_batch.json
+python3 scripts/image_upload_workflow.py --folder Test1
 ```

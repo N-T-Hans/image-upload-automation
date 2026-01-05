@@ -1,0 +1,163 @@
+{
+  "_comment_header": "=================================================================",
+  "_comment_header2": "CardDealerPro Batch Upload Configuration Template",
+  "_comment_header3": "=================================================================",
+  "_comment_instructions": "1. Copy this file and rename it (e.g., my_batch_config.json)",
+  "_comment_instructions2": "2. Replace ALL fields marked with << USER: ... >>",
+  "_comment_instructions3": "3. Use docs/SELECTOR_GUIDE.md to find CSS selectors",
+  "_comment_instructions4": "4. Test with a small batch first to verify selectors work",
+  "_comment_header4": "=================================================================",
+  
+  "default_images_path": "/Users/User/Downloads/Main_Folder",
+  "_comment_default_path": "Example: /Users/username/Desktop/card_images - then use --folder A3 to target /Users/nickhansen/Downloads/CardTest",
+  
+  "image_folder": "<< USER: REPLACE WITH ABSOLUTE PATH TO YOUR IMAGE FOLDER >>",
+  "_comment_image_folder": "Used when --folder is not provided. If using --folder parameter, you can leave this as placeholder.",
+  
+  "urls": {
+    "_comment": "URLs for CardDealerPro workflow - verify these are current",
+    "login": "https://v2.carddealerpro.com/sign-in",
+    "inventory": "https://v2.carddealerpro.com/inventory",
+    "batches": "https://practicetestautomation.com/logged-in-successfully/",
+    "general_settings": "https://v2.carddealerpro.com/create-batch/general-settings"
+  },
+  
+  "general_settings": {
+    "_comment": "First screen when creating a new batch",
+    "_comment2": "These values will be entered into the general settings form",
+    "_comment3": "IMPORTANT: batch_name should match the image folder name for organization",
+    
+    "batch_name": "A3",
+    "_comment_batch_name": "Best practice: Use the same name as your image_folder for easy tracking",
+    
+    "batch_type": "Trading Cards Games",
+    "_comment_batch_type": "Must exactly match dropdown option text. Example: 'Sports Cards'",
+    
+    "sport_type": "Pokémon",
+    "_comment_sport_type": "Must exactly match dropdown option text. Example: 'Baseball', 'Basketball', etc.",
+    
+    "title_template": "Default CDP Template",
+    "_comment_title_template": "OPTIONAL: Must exactly match dropdown option text. Leave blank or omit to skip.",
+    "_comment_title_template_2": "Pokemon Title (Condensed) (LP)",
+
+    "description_template": "Default CDP Template",
+    "_comment_description_template": "OPTIONAL: Must exactly match dropdown option text. Leave blank or omit to skip.",
+    "_comment_description_template_2": "SKU Only"
+  
+  },
+  
+  "optional_details": {
+    "_comment": "Optional fields on the Optional Details page",
+    "_comment2": "Add fields here and corresponding selectors below",
+    
+    "condition": "Lightly played",
+    "_comment_condition": "Card condition - must match dropdown text exactly",
+    
+    "sale_price": "1.00",
+    "_comment_sale_price": "Sale price in dollars (numeric input)"
+  },
+  
+  "scan_options": {
+    "_comment": "Options on the 'Select Cards To Scan' screen",
+    "card_type": "RAW (Not Graded)",
+    "_comment_card_type": "Value for clarity/logs; selection uses selector below",
+    "sides": "Front and Back",
+    "_comment_sides": "This determines whether to upload fronts only or fronts+backs"
+  },
+  
+  "selectors": {
+    "_comment": "=================================================================",
+    "_comment2": "<< USER: REPLACE ALL SELECTORS BELOW WITH ACTUAL CSS SELECTORS >>",
+    "_comment3": "Use Chrome DevTools to find selectors (see docs/SELECTOR_GUIDE.md)",
+    "_comment4": "Test each selector in browser console: document.querySelector('selector')",
+    "_comment5": "=================================================================",
+    
+    "_section_login": "--- LOGIN PAGE SELECTORS ---",
+
+    "username_input": "input.input-controller[type='email']",
+    "continue_button": "button.primary-button",
+    "password_input": "input.input-controller[type='password']",
+    "login_button": "button.primary-button",
+    
+    
+    "_section_general_settings": "--- GENERAL SETTINGS PAGE SELECTORS ---",
+    "batch_name_input": "input.input-controller[type='text']",
+    
+    "batch_type_select": "button[aria-haspopup='listbox']",
+    "batch_type_select_type": "custom",
+    "_comment_batch_type_select": "CUSTOM DROPDOWN: First listbox button (Batch Type)",
+    
+    "sport_type_select": "//label[contains(@class,'controller-label') and normalize-space()='Game']/following-sibling::button[@aria-haspopup='listbox']",
+    "sport_type_select_type": "custom",
+    "_comment_sport_type_select": "CUSTOM DROPDOWN: XPath finds Game label then button",
+    
+    "title_template_select": "//label[contains(@class,'controller-label') and normalize-space()='Title Template']/following-sibling::button[@aria-haspopup='listbox']",
+    "title_template_select_type": "custom",
+    "_comment_title_template_select": "CUSTOM DROPDOWN: XPath finds Title Template label then button",
+    
+    "description_template_select": "//label[contains(@class,'controller-label') and normalize-space()='Description Template']/following-sibling::button[@aria-haspopup='listbox']",
+    "description_template_select_type": "custom",
+    "_comment_description_template_select": "CUSTOM DROPDOWN: XPath finds Description Template label then button",
+    
+    "continue_button_general": "button.primary-button",
+    "_example_continue_general": "Example: 'button.continue' or 'button[type=\"submit\"]'",
+    
+    "_section_optional_details": "--- OPTIONAL DETAILS PAGE SELECTORS ---",
+    
+    "_comment_optional": "Only needed if you have fields in optional_details above",
+    "create_batch_submit": "button.primary-button",
+    
+    "optional_condition": "//label[contains(text(),'Condition')]/following-sibling::button[@aria-haspopup='listbox']",
+    "optional_condition_type": "custom",
+    "_comment_optional_condition": "CUSTOM DROPDOWN: Condition selector (note: this dropdown has a known bug on the website)",
+    
+    "optional_sale_price": "input[type='number'][placeholder='0.00']",
+    "_comment_optional_sale_price": "NUMBER INPUT: Sale price field",
+    
+    "_section_batch_workflow": "--- BATCH WORKFLOW SELECTORS ---",
+    "magic_scan_button": "li:has(img[src*='magic-scan'])",
+    "_example_magic_scan": "Fallback if :has unsupported: 'img[src*=\"magic-scan\"]' (clicks image)",
+    
+    "_section_select_cards_to_scan": "--- SELECT CARDS TO SCAN PAGE SELECTORS ---",
+    "scan_card_type_radio": "input#radio1",
+    
+    "scan_sides_option": "//li[.//h3[normalize-space()='Front & Back Sides']]",
+    "_example_scan_sides_option": "XPath: Click tile with h3 text 'Front & Back Sides'",
+    
+    "scan_sides_select": "<< USER: CSS SELECTOR FOR SIDES DROPDOWN >>",
+    "scan_sides_select_type": "custom",
+    "_example_scan_sides": "For custom Headless UI: 'button[aria-haspopup=\"listbox\"]'; For native: 'select[name=\"sides\"]' (remove _type)",
+    
+    "_section_upload": "--- UPLOAD PAGE SELECTORS ---",
+    "upload_file_input": "input#searchImage",
+    "_example_upload_input": "File input with id='searchImage', accepts multiple files",
+    
+    "upload_continue_button": "button.primary-button",
+    "_example_upload_continue": "Continue button that appears after upload completes",
+    
+    "_section_validation": "--- INSPECTOR VIEW SELECTORS (OPTIONAL) ---",
+    "_comment_validation": "These are for future validation features - can leave as placeholders for now",
+    "image_count_display": "<< OPTIONAL: SELECTOR FOR IMAGE COUNT TEXT >>",
+    "_example_count_display": "Example: '.image-count' or 'span.total-images'",
+    
+    "image_thumbnail_container": "<< OPTIONAL: SELECTOR FOR IMAGE THUMBNAILS CONTAINER >>",
+    "_example_thumbnails": "Example: '.thumbnails-grid' or '#uploaded-images'"
+  },
+  
+  "workflow": {
+    "_comment": "Workflow control settings",
+    "stop_after": "inspector_view",
+    "_comment_stop_after": "Always 'inspector_view' for manual validation",
+    
+    "validate_upload_count": false,
+    "_comment_validate": "Set to true when you have image_count_display or image_thumbnail_container selectors configured"
+  },
+  
+  "_footer_comment": "=================================================================",
+  "_footer_comment2": "After filling this template:",
+  "_footer_comment3": "1. Ensure .env file has CDP_USERNAME and CDP_PASSWORD",
+  "_footer_comment4": "2. Test selectors in browser console",
+  "_footer_comment5": "3. Run: python scripts/image_upload_workflow.py --config your_config.json",
+  "_footer_comment6": "=================================================================",
+  "_footer_note": "For detailed help, see docs/QUICKSTART.md and docs/SELECTOR_GUIDE.md"
+}

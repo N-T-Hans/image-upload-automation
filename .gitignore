@@ -2,6 +2,7 @@
 # Keep the folder structure but ignore all contents except .gitkeep
 config/*
 !config/.gitkeep
+!config/upload_config.json
 
 # Legacy .env location (if users create it in root)
 .env

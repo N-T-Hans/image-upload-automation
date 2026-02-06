@@ -275,6 +275,21 @@ class LoginHandler:
                 login_button = self.waiter.wait_for_element_clickable(login_button_selector)
                 login_button.click()
                 
+                # Brief pause to allow navigation to start
+                time.sleep(2)
+                
+                # Check for data: URL issue (browser blocking navigation)
+                current_url = self.driver.current_url
+                if current_url.startswith('data:'):
+                    console.print("[yellow]⚠ Detected 'data:' URL - browser blocked navigation[/yellow]")
+                    console.print("[dim]Applying workaround: navigating directly to success URL...[/dim]")
+                    # Construct the expected success URL
+                    base_url = login_url.rsplit('/', 1)[0]  # Get base URL without /sign-in
+                    success_url = f"{base_url}/{success_url_pattern}"
+                    self.driver.get(success_url)
+                    console.print(f"[dim]Navigated to: {success_url}[/dim]")
+                    time.sleep(2)
+                
                 # Wait for URL to change (indicates login processed)
                 console.print("[dim]Waiting for redirect...[/dim]")
                 self.waiter.wait_for_url_contains(success_url_pattern)

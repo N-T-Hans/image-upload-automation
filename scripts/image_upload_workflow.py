@@ -239,6 +239,7 @@ class CardDealerProWorkflow:
             # Configure Chrome options (works with Brave since it's Chromium-based)
             options = Options()
             options.binary_location = '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'
+            options.add_argument('--incognito')  # Force fresh session to avoid "already logged in" redirects
             
             if self.headless or SELENIUM_HEADLESS:
                 options.add_argument('--headless')

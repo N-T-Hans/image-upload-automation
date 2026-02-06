@@ -3,9 +3,10 @@
 config/*
 !config/.gitkeep
 !config/upload_config.json
+#config/.env
 
 # Legacy .env location (if users create it in root)
-.env
+# .env
 
 # Python cache
 __pycache__/

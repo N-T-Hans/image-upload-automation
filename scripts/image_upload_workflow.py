@@ -233,11 +233,12 @@ class CardDealerProWorkflow:
             console.print("[green]✓ WebDriver ready[/green]")
             return
         
-        console.print("\n[cyan]Setting up Chrome WebDriver...[/cyan]")
+        console.print("\n[cyan]Setting up Brave WebDriver...[/cyan]")
         
         try:
-            # Configure Chrome options
+            # Configure Chrome options (works with Brave since it's Chromium-based)
             options = Options()
+            options.binary_location = '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'
             
             if self.headless or SELENIUM_HEADLESS:
                 options.add_argument('--headless')

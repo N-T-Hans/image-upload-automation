@@ -107,6 +107,56 @@ python3 tests/test_scan_sides.py --config config/upload_config.json
 python3 scripts/rotate_images.py /path/to/folder
 ```
 
+## 🚀 Shell Shortcuts (Optional)
+
+Add these to your `~/.zshrc` for quick access:
+
+```bash
+# Quick run aliases
+alias yolo='python3 ~/Repos/image-upload-automation/scripts/image_upload_workflow.py --config ~/Repos/image-upload-automation/config/upload_config.json --folder'
+alias yolo-headless='python3 ~/Repos/image-upload-automation/scripts/image_upload_workflow.py --config ~/Repos/image-upload-automation/config/upload_config.json --folder --headless'
+
+# Function to run in new iTerm2 tab with custom title
+cdp() {
+    if [ -z "$1" ]; then
+        echo "Usage: cdp <folder_name> [folder_name2 ...]"
+        echo "Example: cdp A3"
+        echo "Example: cdp A3 B4 C5"
+        return 1
+    fi
+    
+    # Build tab title from all folder names
+    tab_title="$*"
+    
+    # AppleScript to open new iTerm2 tab with custom title
+    osascript <<EOF
+        tell application "iTerm2"
+            tell current window
+                create tab with default profile
+                tell current session of current tab
+                    set name to "$tab_title"
+                    write text "cd ~/Repos/image-upload-automation"
+                    write text "python3 scripts/image_upload_workflow.py --config config/upload_config.json --folder $*"
+                end tell
+            end tell
+        end tell
+EOF
+}
+```
+
+**Usage:**
+```bash
+yolo A3                    # Run with visible browser
+yolo-headless A3          # Run in headless mode
+cdp A3                    # Open new iTerm2 tab and run
+cdp A3 B4 C5              # Multiple folders in new tab
+```
+
+**After adding to ~/.zshrc, reload:**
+```bash
+source ~/.zshrc
+```
+
 ## 📋 Workflow Steps (13)
 
 1. Rotate Images (front→8, back→6)

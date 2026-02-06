@@ -21,8 +21,9 @@ EXIF_ORIENTATION_TAG = 274
 # =============================================================================
 
 # Browser to use for automation
-# USER NOTE: Currently only 'chrome' is supported
-SELENIUM_WEBDRIVER = 'chrome'
+# USER NOTE: Brave browser is used by default to avoid Chrome navigation issues
+# To switch back to Chrome, comment out BRAVE_BROWSER_PATH in image_upload_workflow.py
+SELENIUM_WEBDRIVER = 'brave'
 
 # Run browser in headless mode (no visible window)
 # USER NOTE: Set to True for production runs, False for debugging
